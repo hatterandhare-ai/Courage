@@ -196,7 +196,14 @@
       radial-gradient(ellipse at 20% -10%, #2A1638 0%, transparent 55%),
       #170F1F;
     color: #F3EEFA;
-    padding: 36px 40px 60px;
+    /* A fluid scale the whole display view is built from: ~25px at a
+       typical laptop/monitor viewport, growing up to 40px on a large TV
+       or projector, with a 20px floor so it still degrades gracefully on
+       a phone. Every size below is expressed as a multiple of this one
+       value (via calc()), so the whole screen scales together instead of
+       each piece being tuned — and hitting the "right" ratio — on its own. */
+    --wall-scale: clamp(20px, 0.6rem + 1.1vw, 40px);
+    padding: calc(var(--wall-scale) * 1.44) calc(var(--wall-scale) * 1.6) calc(var(--wall-scale) * 2.4);
   }
 
   .wall-header {
@@ -204,25 +211,25 @@
     justify-content: space-between;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 30px;
-    padding-bottom: 18px;
+    gap: calc(var(--wall-scale) * 0.5);
+    margin-bottom: calc(var(--wall-scale) * 1.2);
+    padding-bottom: calc(var(--wall-scale) * 0.72);
     border-bottom: 1px solid rgba(243,238,250,0.16);
   }
   .wall-header h1 {
     color: var(--wall-accent, #E4D2F7);
     margin: 0;
-    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-size: calc(var(--wall-scale) * 1.6);
   }
   .wall-count {
-    font-size: 1.1rem;
+    font-size: calc(var(--wall-scale) * 0.7);
     color: #F0B65C;
   }
-  .wall-count .num { font-size: 1.6rem; font-weight: 600; }
+  .wall-count .num { font-size: calc(var(--wall-scale) * 1); font-weight: 600; }
 
-  .goal-bar { margin-bottom: 26px; }
+  .goal-bar { margin-bottom: calc(var(--wall-scale) * 1.04); }
   .goal-bar-track {
-    height: 10px;
+    height: calc(var(--wall-scale) * 0.4);
     border-radius: 999px;
     background: rgba(243, 238, 250, 0.14);
     overflow: hidden;
@@ -234,23 +241,23 @@
     transition: width 0.5s ease;
   }
   .goal-bar-label {
-    margin-top: 7px;
-    font-size: 0.82rem;
+    margin-top: calc(var(--wall-scale) * 0.28);
+    font-size: calc(var(--wall-scale) * 0.52);
     color: #C9B9DE;
   }
 
   .collage {
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
+    gap: calc(var(--wall-scale) * 0.64);
     align-content: flex-start;
   }
   .sticky-note {
-    width: 148px;
-    min-height: 96px;
-    padding: 12px;
+    width: calc(var(--wall-scale) * 6);
+    min-height: calc(var(--wall-scale) * 3.8);
+    padding: calc(var(--wall-scale) * 0.48);
     border-radius: 3px;
-    font-size: 0.82rem;
+    font-size: calc(var(--wall-scale) * 0.52);
     font-weight: 600;
     box-shadow: 0 6px 14px rgba(0,0,0,0.4);
     display: flex;
@@ -270,32 +277,32 @@
   .empty-wall {
     color: #9F8DB6;
     font-style: italic;
-    margin-top: 60px;
+    margin-top: calc(var(--wall-scale) * 2.4);
     text-align: center;
-    font-size: 1.05rem;
+    font-size: calc(var(--wall-scale) * 0.68);
   }
 
   .display-qr {
     position: fixed;
-    left: 20px;
-    bottom: 20px;
+    left: calc(var(--wall-scale) * 0.8);
+    bottom: calc(var(--wall-scale) * 0.8);
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(var(--wall-scale) * 0.48);
     background: rgba(23, 15, 31, 0.55);
     border: 1px solid rgba(243,238,250,0.16);
     border-radius: 14px;
-    padding: 12px;
+    padding: calc(var(--wall-scale) * 0.48);
     backdrop-filter: blur(4px);
   }
   .display-qr .qr-box { flex-shrink: 0; }
   .display-qr .qr-copy {
-    font-size: 0.82rem;
+    font-size: calc(var(--wall-scale) * 0.52);
     color: #F3EEFA;
     max-width: 12ch;
     line-height: 1.3;
   }
-  .display-qr .qr-copy strong { display: block; color: #F0B65C; font-size: 0.88rem; }
+  .display-qr .qr-copy strong { display: block; color: #F0B65C; font-size: calc(var(--wall-scale) * 0.56); }
 
   /* ============ ADMIN VIEW ============ */
   #admin-view.active {
@@ -610,10 +617,6 @@
   .bg-preview:not(.empty) { color: transparent; }
   .bg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-  @media (max-width: 480px) {
-    .sticky-note { width: 118px; min-height: 84px; font-size: 0.74rem; }
-    #display-view.active { padding: 24px 18px 50px; }
-  }
 </style>
 </head>
 <body>
@@ -781,6 +784,17 @@
   function seededRotation(seed) {
     const x = Math.sin(seed * 999) * 10000;
     return ((x - Math.floor(x)) * 8 - 4).toFixed(1);
+  }
+
+  // Mirrors the --wall-scale clamp() in CSS (20px floor, 40px ceiling,
+  // ~25px at a typical 1400px viewport). CSS can rescale the display
+  // view's fonts and boxes crisply on its own, but the QR code is a
+  // raster image QRCode.js renders once at a fixed pixel size — CSS
+  // stretching it would just blur it — so this computes the matching
+  // pixel size in JS before that render call.
+  function wallScale() {
+    const w = window.innerWidth;
+    return Math.max(20, Math.min(40, 9.6 + 0.011 * w));
   }
 
   function textColorFor(hex) {
@@ -1012,7 +1026,7 @@
 
       if (!qrRendered) {
         const voterUrl = window.location.origin + window.location.pathname + "?view=pledge";
-        renderQR(document.getElementById("display-qr-box"), voterUrl, 84);
+        renderQR(document.getElementById("display-qr-box"), voterUrl, Math.round(wallScale() * 3.36));
         qrRendered = true;
       }
     }
