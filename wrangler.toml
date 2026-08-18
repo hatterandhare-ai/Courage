@@ -1,0 +1,19 @@
+name = "courage-wall"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+
+# Cloudflare KV namespace used to store the vote array.
+# Create it with: wrangler kv namespace create VOTES_KV
+# Then replace the id below with the id wrangler prints.
+[[kv_namespaces]]
+binding = "VOTES_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+[vars]
+ADMIN_PIN = "1234"
+
+# Uncomment and adjust once the zone is set up, so the Worker answers
+# API requests directly on the app's custom domain.
+# routes = [
+#   { pattern = "courage.tomhawkins.me/api/*", zone_name = "tomhawkins.me" }
+# ]
