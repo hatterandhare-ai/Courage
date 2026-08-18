@@ -90,7 +90,7 @@ Beyond the original vote/reset endpoints, the Worker now also serves the pledge 
 
 ## Known limitations
 
-- Votes, pledge options, campaign settings, and the background image are each stored as one JSON value under one KV key apiece. This keeps the app simple but means writes are read-modify-write, not atomic — under heavy simultaneous traffic a small number of pledges could race and overwrite each other. Fine for a single-event display; consider Durable Objects if you need strict consistency at scale.
+- Pledge options, campaign settings, and the background image are each stored as one JSON value under one KV key apiece — read-modify-write, not atomic. Fine here, since only the (single) admin ever writes them; there's no realistic concurrent-write scenario. Votes don't have this problem: each pledge gets its own KV key specifically so simultaneous submissions from many people never contend with each other (confirmed by testing concurrent writes locally, both before and after that change — see the commit that introduced it).
 - Cloudflare KV is eventually consistent — a write can take a little while (typically seconds, occasionally up to ~60s) to propagate to every edge location. For a single in-person event this is rarely noticeable, but don't expect instant global consistency.
 - The background image is stored as a data URL directly in KV (capped at 5MB server-side; the admin panel downscales uploads client-side to stay well under that). For very large images or many campaigns' worth of assets, consider moving this to R2 instead.
 - The admin PIN is a shared constant, not a per-user credential. It gates every mutating endpoint on the backend, but only lightly gates the frontend admin view. Don't reuse it for anything sensitive.
