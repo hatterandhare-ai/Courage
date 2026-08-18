@@ -1,0 +1,12 @@
+# Local Wrangler dev state (KV emulation, cache) from `wrangler dev`
+.wrangler/
+
+# Dependencies, if any tooling gets added later
+node_modules/
+
+# Local-only secrets
+.dev.vars
+.env
+
+# OS cruft
+.DS_Store
