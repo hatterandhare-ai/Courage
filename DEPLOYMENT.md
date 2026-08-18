@@ -80,11 +80,17 @@ In the Cloudflare Pages project → **Custom domains**, add `courage.tomhawkins.
 
 ## 6. Verify
 
-- Visit `https://courage.tomhawkins.me/` — the voter view should load and submitting a commitment should succeed.
-- Visit `https://courage.tomhawkins.me/?view=display` — votes should appear within ~1 second of being submitted.
-- Visit `https://courage.tomhawkins.me/?view=admin`, enter the PIN, and confirm stats, the QR code, and the reset button all work.
+- Visit `https://courage.tomhawkins.me/` (or `?view=pledge`) — the pledge view should load and submitting a commitment should succeed.
+- Visit `https://courage.tomhawkins.me/?view=display` — pledges should appear within ~1 second of being submitted, since the display polls `GET /api/state` every second.
+- Visit `https://courage.tomhawkins.me/?view=admin`, enter the PIN, and confirm stats, the pledge list (edit/remove), the pledge options editor, campaign branding fields, the goal toggle, background upload, the QR code, and reset all work.
+
+## API surface
+
+Beyond the original vote/reset endpoints, the Worker now also serves the pledge options, campaign branding, goal setting, and display background — see the comment block at the top of `worker.js` for the full list. `GET /api/state` returns all of it in one call and is what the display and admin views poll; individual `GET`/`PUT`/`PATCH`/`DELETE` endpoints exist per resource for the admin panel's actions. Everything except `POST /api/vote` and the `GET` endpoints requires the PIN in the request body.
 
 ## Known limitations
 
-- Votes are stored as a single JSON array under one KV key. This keeps the app simple but means concurrent writes are read-modify-write, not atomic — under heavy simultaneous traffic a small number of votes could race and overwrite each other. Fine for a single-event display; consider Durable Objects if you need strict consistency at scale.
-- The admin PIN is a shared constant, not a per-user credential. It gates the reset endpoint on the backend, but only lightly gates the frontend admin view. Don't reuse it for anything sensitive.
+- Votes, pledge options, campaign settings, and the background image are each stored as one JSON value under one KV key apiece. This keeps the app simple but means writes are read-modify-write, not atomic — under heavy simultaneous traffic a small number of pledges could race and overwrite each other. Fine for a single-event display; consider Durable Objects if you need strict consistency at scale.
+- Cloudflare KV is eventually consistent — a write can take a little while (typically seconds, occasionally up to ~60s) to propagate to every edge location. For a single in-person event this is rarely noticeable, but don't expect instant global consistency.
+- The background image is stored as a data URL directly in KV (capped at 5MB server-side; the admin panel downscales uploads client-side to stay well under that). For very large images or many campaigns' worth of assets, consider moving this to R2 instead.
+- The admin PIN is a shared constant, not a per-user credential. It gates every mutating endpoint on the backend, but only lightly gates the frontend admin view. Don't reuse it for anything sensitive.

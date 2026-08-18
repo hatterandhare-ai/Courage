@@ -3,334 +3,972 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Courage Wall — Wear It Purple Day</title>
+<title>Courage Wall</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --purple: #7c3aed;
-    --blue: #3b82f6;
-    --green: #10b981;
-    --yellow: #f59e0b;
-    --orange: #f97316;
-    --red: #ef4444;
-    --ink: #1f2937;
-    --bg: #f5f3ff;
+    --ink: #241B2F;
+    --ink-soft: #5B4C6B;
+    --paper: #F7F4FB;
+    --paper-alt: #EDE6F7;
+    --paper-card: #FFFFFF;
+    --plum: #4C1D6B;
+    --plum-strong: #34124A;
+    --gold: #B87A1F;
+    --line: rgba(36, 27, 47, 0.14);
+    --shadow: rgba(36, 27, 47, 0.16);
+    --danger: #B3261E;
+
+    --c-learn: #7c3aed;
+    --c-train: #3b82f6;
+    --c-challenge: #10b981;
+    --c-speak: #f59e0b;
+    --c-support: #f97316;
+    --c-share: #ef4444;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #F3EEFA;
+      --ink-soft: #C9B9DE;
+      --paper: #170F1F;
+      --paper-alt: #241733;
+      --paper-card: #2A1B3B;
+      --plum: #C9A6EA;
+      --plum-strong: #E4D2F7;
+      --gold: #F0B65C;
+      --line: rgba(243, 238, 250, 0.16);
+      --shadow: rgba(0, 0, 0, 0.45);
+      --danger: #FF8B80;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #F3EEFA;
+    --ink-soft: #C9B9DE;
+    --paper: #170F1F;
+    --paper-alt: #241733;
+    --paper-card: #2A1B3B;
+    --plum: #C9A6EA;
+    --plum-strong: #E4D2F7;
+    --gold: #F0B65C;
+    --line: rgba(243, 238, 250, 0.16);
+    --shadow: rgba(0, 0, 0, 0.45);
+    --danger: #FF8B80;
   }
 
   * { box-sizing: border-box; }
 
   body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
+    min-height: 100vh;
+    background: var(--paper);
     color: var(--ink);
+    font-family: "Work Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
 
-  .view { display: none; min-height: 100vh; }
+  h1, h2, .display-font {
+    font-family: "Fraunces", Georgia, "Times New Roman", serif;
+    text-wrap: balance;
+    font-weight: 600;
+  }
+
+  button { font-family: inherit; }
+  button:focus-visible, a:focus-visible, input:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .view { display: none; }
   .view.active { display: block; }
 
-  /* ---------- Voter view ---------- */
-  #voter-view {
-    display: none;
+  .nav-links {
+    position: fixed;
+    bottom: 14px;
+    right: 16px;
+    display: flex;
+    gap: 6px;
+    font-size: 0.72rem;
+    z-index: 20;
+  }
+  .nav-links a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--paper-card);
+    opacity: 0.75;
+    transition: opacity 0.15s ease;
+  }
+  .nav-links a:hover { opacity: 1; }
+
+  /* ============ PLEDGE VIEW ============ */
+  #pledge-view.active {
+    display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 32px 16px 64px;
+    min-height: 100vh;
+    padding: 48px 20px 90px;
   }
-  #voter-view.active { display: flex; }
 
-  .voter-header {
-    text-align: center;
-    max-width: 560px;
-    margin-bottom: 24px;
+  .pledge-card {
+    width: 100%;
+    max-width: 440px;
   }
-  .voter-header h1 {
-    color: var(--purple);
-    margin-bottom: 8px;
-    font-size: 1.8rem;
+
+  .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin: 0 0 10px;
   }
-  .voter-header p { color: #4b5563; }
+
+  .pledge-card h1 {
+    font-size: clamp(2rem, 6vw, 2.6rem);
+    margin: 0 0 10px;
+    color: var(--plum);
+  }
+
+  .pledge-card > p {
+    color: var(--ink-soft);
+    margin: 0 0 30px;
+    max-width: 40ch;
+    line-height: 1.5;
+  }
 
   .commitment-list {
-    display: grid;
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 12px;
-    width: 100%;
-    max-width: 420px;
   }
+
   .commitment-btn {
     border: none;
-    border-radius: 12px;
+    border-radius: 4px 14px 4px 14px;
     padding: 18px 20px;
-    font-size: 1.05rem;
+    font-size: 1.02rem;
     font-weight: 600;
-    color: #fff;
+    font-family: "Work Sans", sans-serif;
     cursor: pointer;
     text-align: left;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.12);
-    transition: transform 0.1s ease;
+    box-shadow: 0 4px 10px var(--shadow);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .commitment-btn:active { transform: scale(0.98); }
-  .commitment-btn:disabled { opacity: 0.6; cursor: default; }
+  .commitment-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 16px var(--shadow); }
+  .commitment-btn:active { transform: translateY(0) scale(0.99); }
+  .commitment-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
 
   .thank-you {
     display: none;
     text-align: center;
-    margin-top: 32px;
+    margin-top: 8px;
   }
   .thank-you.active { display: block; }
-  .thank-you h2 { color: var(--green); }
-  .thank-you button {
-    margin-top: 16px;
+  .thank-you .stamp {
+    font-size: 2.2rem;
+    margin-bottom: 6px;
+  }
+  .thank-you h2 { color: var(--plum); margin: 0 0 8px; font-size: 1.6rem; }
+  .thank-you p { color: var(--ink-soft); margin: 0 0 22px; }
+  .ghost-btn {
     background: none;
-    border: 1px solid var(--purple);
-    color: var(--purple);
-    padding: 8px 16px;
-    border-radius: 8px;
+    border: 1px solid var(--plum);
+    color: var(--plum);
+    padding: 10px 20px;
+    border-radius: 999px;
     cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  /* ============ DISPLAY VIEW (fixed dark wall, always) ============ */
+  #display-view.active {
+    display: block;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 20% -10%, #2A1638 0%, transparent 55%),
+      #170F1F;
+    color: #F3EEFA;
+    padding: 36px 40px 60px;
   }
 
-  .view-links {
-    position: fixed;
-    bottom: 8px;
-    right: 8px;
-    font-size: 0.75rem;
-    opacity: 0.4;
-  }
-  .view-links a { color: var(--ink); margin-left: 8px; text-decoration: none; }
-  .view-links a:hover { opacity: 1; text-decoration: underline; }
-
-  /* ---------- Display view ---------- */
-  #display-view {
-    padding: 24px;
-  }
-  .display-header {
+  .wall-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
+    align-items: baseline;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
+    margin-bottom: 30px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid rgba(243,238,250,0.16);
   }
-  .display-header h1 { color: var(--purple); margin: 0; font-size: 1.5rem; }
-  .vote-count { font-size: 1.1rem; font-weight: 600; }
+  .wall-header h1 {
+    color: var(--wall-accent, #E4D2F7);
+    margin: 0;
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+  }
+  .wall-count {
+    font-size: 1.1rem;
+    color: #F0B65C;
+  }
+  .wall-count .num { font-size: 1.6rem; font-weight: 600; }
+
+  .goal-bar { margin-bottom: 26px; }
+  .goal-bar-track {
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(243, 238, 250, 0.14);
+    overflow: hidden;
+  }
+  .goal-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--wall-accent, #C9A6EA), var(--wall-accent-strong, #F0B65C));
+    transition: width 0.5s ease;
+  }
+  .goal-bar-label {
+    margin-top: 7px;
+    font-size: 0.82rem;
+    color: #C9B9DE;
+  }
 
   .collage {
     display: flex;
     flex-wrap: wrap;
-    gap: 14px;
+    gap: 16px;
     align-content: flex-start;
   }
   .sticky-note {
-    width: 130px;
-    min-height: 90px;
-    padding: 10px;
-    border-radius: 4px;
-    color: #fff;
-    font-size: 0.8rem;
+    width: 148px;
+    min-height: 96px;
+    padding: 12px;
+    border-radius: 3px;
+    font-size: 0.82rem;
     font-weight: 600;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.4);
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
     word-break: break-word;
+    animation: drop-in 0.35s ease both;
+  }
+  @keyframes drop-in {
+    from { opacity: 0; transform: translateY(-8px) rotate(0deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sticky-note { animation: none; }
   }
 
-  .empty-state {
-    color: #6b7280;
+  .empty-wall {
+    color: #9F8DB6;
     font-style: italic;
-    margin-top: 40px;
+    margin-top: 60px;
     text-align: center;
+    font-size: 1.05rem;
   }
 
-  /* ---------- Admin view ---------- */
-  #admin-view { padding: 24px; max-width: 640px; margin: 0 auto; }
-  #admin-view h1 { color: var(--purple); }
+  .display-qr {
+    position: fixed;
+    left: 20px;
+    bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(23, 15, 31, 0.55);
+    border: 1px solid rgba(243,238,250,0.16);
+    border-radius: 14px;
+    padding: 12px;
+    backdrop-filter: blur(4px);
+  }
+  .display-qr .qr-box { flex-shrink: 0; }
+  .display-qr .qr-copy {
+    font-size: 0.82rem;
+    color: #F3EEFA;
+    max-width: 12ch;
+    line-height: 1.3;
+  }
+  .display-qr .qr-copy strong { display: block; color: #F0B65C; font-size: 0.88rem; }
+
+  /* ============ ADMIN VIEW ============ */
+  #admin-view.active {
+    display: block;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 44px 20px 90px;
+  }
+  #admin-view h1 { color: var(--plum); margin: 0 0 26px; font-size: 1.7rem; }
 
   .pin-gate {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
     max-width: 260px;
   }
+  .pin-gate label { font-size: 0.85rem; color: var(--ink-soft); }
   .pin-gate input {
-    padding: 10px;
+    padding: 11px 12px;
     font-size: 1rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--line);
     border-radius: 8px;
+    background: var(--paper-card);
+    color: var(--ink);
   }
-  .pin-gate button, .admin-panel button {
-    padding: 10px 16px;
+  .primary-btn {
+    padding: 11px 18px;
     border: none;
     border-radius: 8px;
-    background: var(--purple);
-    color: #fff;
+    background: var(--plum);
+    color: var(--paper);
     cursor: pointer;
     font-weight: 600;
+    font-size: 0.92rem;
   }
-  .pin-error { color: var(--red); font-size: 0.85rem; display: none; }
+  .pin-error {
+    color: var(--danger);
+    font-size: 0.85rem;
+    display: none;
+  }
   .pin-error.active { display: block; }
 
   .admin-panel { display: none; }
   .admin-panel.active { display: block; }
 
+  .section-label {
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 10px;
-    margin: 16px 0 24px;
+    margin-bottom: 30px;
   }
   .stat-card {
-    background: #fff;
-    border-radius: 10px;
-    padding: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
   }
-  .stat-card .label { font-size: 0.8rem; color: #6b7280; }
-  .stat-card .value { font-size: 1.4rem; font-weight: 700; }
+  .stat-card .label { font-size: 0.78rem; color: var(--ink-soft); margin-bottom: 4px; }
+  .stat-card .value { font-size: 1.5rem; font-weight: 600; }
+  .stat-card.total { border-color: var(--plum); }
+  .stat-card.total .value { color: var(--plum); }
+
+  .pledge-list-card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+    margin-bottom: 30px;
+  }
+  .pledge-list { list-style: none; margin: 0; padding: 0; }
+  .pledge-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 8px;
+  }
+  .pledge-row + .pledge-row { border-top: 1px solid var(--line); }
+  .pledge-swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .pledge-select {
+    flex: 1;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 0.84rem;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .pledge-time {
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    flex-shrink: 0;
+  }
+  .pledge-delete {
+    background: none;
+    border: 1px solid var(--danger);
+    color: var(--danger);
+    border-radius: 6px;
+    padding: 5px 9px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .pledge-list-empty {
+    padding: 18px;
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 0.85rem;
+  }
+
+  .campaign-card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .field-label {
+    font-size: 0.74rem;
+    color: var(--ink-soft);
+    margin-top: 10px;
+  }
+  .field-label:first-child { margin-top: 0; }
+  .field-input {
+    font-family: inherit;
+    font-size: 0.9rem;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .goal-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.86rem;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .toggle-label input { width: 16px; height: 16px; cursor: pointer; }
+  .goal-target-input { width: 90px; }
+
+  .options-card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 30px;
+  }
+  .option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .option-color {
+    width: 38px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 2px;
+    background: none;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .option-label {
+    flex: 1;
+    min-width: 0;
+    font-family: inherit;
+    font-size: 0.88rem;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+  }
 
   .admin-actions {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
-    margin-bottom: 24px;
+    margin-bottom: 34px;
   }
-  .admin-actions .danger { background: var(--red); }
-  .admin-actions .secondary { background: var(--blue); }
+  .secondary-btn, .danger-btn {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.88rem;
+  }
+  .secondary-btn { background: var(--paper-alt); color: var(--plum); border: 1px solid var(--plum); }
+  .danger-btn { background: var(--danger); color: #fff; }
+  .secondary-btn:disabled, .danger-btn:disabled { opacity: 0.55; cursor: default; }
 
-  #qrcode-container {
-    background: #fff;
-    display: inline-block;
-    padding: 16px;
+  .link-card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
     border-radius: 12px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    padding: 18px;
   }
+  .qr-box {
+    display: inline-block;
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 10px;
+    line-height: 0;
+    box-shadow: 0 2px 8px var(--shadow);
+  }
+  .qr-box svg, .qr-box img, .qr-box canvas { display: block; border-radius: 4px; }
+  .link-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .link-row code {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    background: var(--paper-alt);
+    padding: 9px 11px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    color: var(--ink);
+  }
+  .copy-note {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    margin-top: 8px;
+    min-height: 1em;
+  }
+  .sync-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
+    color: var(--ink-soft);
+    margin-top: 22px;
+  }
+  .sync-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: #2FA35A;
+  }
+  .sync-dot.off { background: var(--danger); }
+
+  .bg-card {
+    background: var(--paper-card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .bg-preview {
+    width: 92px;
+    height: 62px;
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    background-color: var(--paper-alt);
+    border: 1px solid var(--line);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    color: var(--ink-soft);
+    text-align: center;
+    padding: 4px;
+  }
+  .bg-preview:not(.empty) { color: transparent; }
+  .bg-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
   @media (max-width: 480px) {
-    .sticky-note { width: 100px; min-height: 80px; font-size: 0.72rem; }
-    .voter-header h1 { font-size: 1.5rem; }
+    .sticky-note { width: 118px; min-height: 84px; font-size: 0.74rem; }
+    #display-view.active { padding: 24px 18px 50px; }
   }
 </style>
 </head>
 <body>
+<!-- ===================== PLEDGE VIEW ===================== -->
+<div id="pledge-view" class="view">
+  <div class="pledge-card">
+    <p class="eyebrow" id="pledge-eyebrow">Wear It Purple Day</p>
+    <h1 id="pledge-title">Courage Wall</h1>
+    <p id="pledge-tagline">Pick one commitment you're making today. It'll land on the wall right away.</p>
 
-<!-- ===================== VOTER VIEW ===================== -->
-<div id="voter-view" class="view">
-  <div class="voter-header">
-    <h1>Courage Wall</h1>
-    <p>Wear It Purple Day — pick one commitment you're making today.</p>
-  </div>
+    <div class="commitment-list" id="commitment-list"></div>
 
-  <div class="commitment-list" id="commitment-list"></div>
+    <div class="thank-you" id="thank-you">
+      <div class="stamp">💜</div>
+      <h2>Thank you</h2>
+      <p>Your commitment just landed on the wall.</p>
+      <button class="ghost-btn" id="vote-again-btn">Make another pledge</button>
+    </div>
 
-  <div class="thank-you" id="thank-you">
-    <h2>Thank you! 💜</h2>
-    <p>Your commitment has been added to the wall.</p>
-    <button id="vote-again-btn">Vote again</button>
-  </div>
-
-  <div class="view-links">
-    <a href="?view=display">Display</a>
-    <a href="?view=admin">Admin</a>
   </div>
 </div>
 
 <!-- ===================== DISPLAY VIEW ===================== -->
 <div id="display-view" class="view">
-  <div class="display-header">
-    <h1>Courage Wall — Live</h1>
-    <div class="vote-count"><span id="display-count">0</span> commitments made</div>
+  <div class="wall-header">
+    <h1 class="display-font" id="wall-title">Courage Wall</h1>
+    <div class="wall-count"><span class="num mono" id="display-count">0</span> pledges made</div>
   </div>
+
+  <div class="goal-bar" id="goal-bar" hidden>
+    <div class="goal-bar-track"><div class="goal-bar-fill" id="goal-bar-fill"></div></div>
+    <div class="goal-bar-label" id="goal-bar-label"></div>
+  </div>
+
   <div class="collage" id="collage"></div>
-  <div class="empty-state" id="empty-state">No votes yet — be the first to add one!</div>
+  <div class="empty-wall" id="empty-wall">No pledges yet — be the first to add one.</div>
+
+  <div class="display-qr">
+    <div class="qr-box" id="display-qr-box"></div>
+    <div class="qr-copy"><strong>Scan to pledge</strong>Add your own commitment</div>
+  </div>
 </div>
 
 <!-- ===================== ADMIN VIEW ===================== -->
 <div id="admin-view" class="view">
-  <h1>Admin</h1>
+  <h1 class="display-font">Admin</h1>
 
   <div class="pin-gate" id="pin-gate">
     <label for="pin-input">Enter admin PIN</label>
-    <input id="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" />
-    <button id="pin-submit-btn">Unlock</button>
+    <input id="pin-input" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" autocomplete="off" />
+    <button class="primary-btn" id="pin-submit-btn">Unlock</button>
     <div class="pin-error" id="pin-error">Incorrect PIN</div>
   </div>
 
   <div class="admin-panel" id="admin-panel">
-    <div class="stats-grid" id="stats-grid"></div>
+    <p class="section-label">Campaign</p>
+    <div class="campaign-card">
+      <label class="field-label" for="settings-eyebrow">Eyebrow</label>
+      <input type="text" id="settings-eyebrow" class="field-input" maxlength="40" />
 
-    <div class="admin-actions">
-      <button id="demo-votes-btn" class="secondary">Add 10 demo votes</button>
-      <button id="reset-votes-btn" class="danger">Reset all votes</button>
+      <label class="field-label" for="settings-title">Title</label>
+      <input type="text" id="settings-title" class="field-input" maxlength="40" />
+
+      <label class="field-label" for="settings-tagline">Tagline</label>
+      <input type="text" id="settings-tagline" class="field-input" maxlength="140" />
+
+      <label class="field-label" for="settings-accent">Accent color</label>
+      <input type="color" id="settings-accent" class="option-color" />
+
+      <div class="goal-row">
+        <label class="toggle-label">
+          <input type="checkbox" id="settings-goal-enabled" />
+          Show goal progress on display
+        </label>
+        <input type="number" id="settings-goal-target" class="field-input goal-target-input" min="1" step="1" />
+      </div>
     </div>
 
-    <h2>Voter QR code</h2>
-    <div id="qrcode-container"></div>
-    <p id="voter-url-text" style="font-size:0.85rem;color:#6b7280;word-break:break-all;"></p>
+    <p class="section-label">Live stats</p>
+    <div class="stats-grid" id="stats-grid"></div>
+
+    <p class="section-label">Pledge options</p>
+    <div class="options-card">
+      <div class="option-list" id="option-list"></div>
+      <button class="secondary-btn" id="option-reset-btn">Reset to defaults</button>
+    </div>
+
+    <p class="section-label">Pledges</p>
+    <div class="pledge-list-card">
+      <ul class="pledge-list" id="pledge-list"></ul>
+      <div class="pledge-list-empty" id="pledge-list-empty">No pledges yet.</div>
+    </div>
+
+    <p class="section-label">Actions</p>
+    <div class="admin-actions">
+      <button class="secondary-btn" id="demo-votes-btn">Add 10 demo pledges</button>
+      <button class="danger-btn" id="reset-votes-btn">Reset all pledges</button>
+    </div>
+
+    <p class="section-label">Scan to pledge</p>
+    <div class="link-card">
+      <div class="qr-box" id="admin-qr-box"></div>
+      <span style="font-size:0.86rem;color:var(--ink-soft);display:block;margin-top:12px;">Anyone who opens this link can add a pledge — works from any device.</span>
+      <div class="link-row">
+        <code id="voter-url-text"></code>
+        <button class="secondary-btn" id="copy-link-btn">Copy link</button>
+      </div>
+      <div class="copy-note" id="copy-note"></div>
+    </div>
+
+    <p class="section-label">Display background</p>
+    <div class="bg-card">
+      <div class="bg-preview empty" id="bg-preview">No image set</div>
+      <div class="bg-actions">
+        <button class="secondary-btn" id="bg-upload-btn">Upload image</button>
+        <button class="secondary-btn" id="bg-clear-btn">Clear</button>
+        <input type="file" id="bg-file-input" accept="image/*" hidden />
+      </div>
+    </div>
+    <div class="copy-note" id="bg-note" style="margin-top:-10px;margin-bottom:20px;"></div>
+
+    <div class="sync-badge"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Syncs live for everyone viewing the wall</span></div>
   </div>
 </div>
 
+<div class="nav-links">
+  <a href="?view=pledge">Pledge</a>
+  <a href="?view=display">Display</a>
+  <a href="?view=admin">Admin</a>
+</div>
+
+
 <script>
 (function () {
-  // Update this to your deployed Worker URL (see DEPLOYMENT.md).
-  const API_BASE_URL = window.COURAGE_WALL_API_BASE || "";
   const ADMIN_PIN = "1234";
+  const API_BASE_URL = window.COURAGE_WALL_API_BASE || "";
 
-  const COMMITMENTS = [
-    { key: "Learn more", color: "var(--purple)" },
-    { key: "Attend training", color: "var(--blue)" },
-    { key: "Challenge assumptions", color: "var(--green)" },
-    { key: "Speak up", color: "var(--yellow)" },
-    { key: "Support colleague", color: "var(--orange)" },
-    { key: "Share story", color: "var(--red)" },
+  const DEFAULT_COMMITMENTS = [
+    { id: "learn", label: "Learn more", color: "#7c3aed" },
+    { id: "training", label: "Attend training", color: "#3b82f6" },
+    { id: "challenge", label: "Challenge assumptions", color: "#10b981" },
+    { id: "speak", label: "Speak up", color: "#f59e0b" },
+    { id: "support", label: "Support colleague", color: "#f97316" },
+    { id: "share", label: "Share story", color: "#ef4444" },
   ];
 
   function apiUrl(path) {
     return API_BASE_URL ? API_BASE_URL.replace(/\/$/, "") + path : path;
   }
 
-  // ---------- View routing ----------
+  async function apiGet(path) {
+    const res = await fetch(apiUrl(path));
+    if (!res.ok) throw new Error("Request failed: " + path);
+    return res.json();
+  }
+
+  function apiSend(path, method, body) {
+    return fetch(apiUrl(path), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+  }
+
+  function seededRotation(seed) {
+    const x = Math.sin(seed * 999) * 10000;
+    return ((x - Math.floor(x)) * 8 - 4).toFixed(1);
+  }
+
+  function textColorFor(hex) {
+    const clean = (hex || "").replace("#", "");
+    if (!/^[0-9a-fA-F]{6}$/.test(clean)) return "#ffffff";
+    const r = parseInt(clean.slice(0, 2), 16);
+    const g = parseInt(clean.slice(2, 4), 16);
+    const b = parseInt(clean.slice(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? "#241B2F" : "#ffffff";
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+    }[ch]));
+  }
+
+  // ---------- Campaign branding (title/tagline/accent color) ----------
+  // Same algorithmic derivation as the prototype: one admin-picked accent
+  // hue is adapted into light-mode, dark-mode, and always-dark-wall tints
+  // so it stays legible everywhere without needing three separate pickers.
+  function hexToHsl(hex) {
+    const clean = (hex || "").replace("#", "");
+    const r = parseInt(clean.slice(0, 2), 16) / 255;
+    const g = parseInt(clean.slice(2, 4), 16) / 255;
+    const b = parseInt(clean.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+      else if (max === g) h = (b - r) / d + 2;
+      else h = (r - g) / d + 4;
+      h /= 6;
+    }
+    return { h: h * 360, s: s * 100, l: l * 100 };
+  }
+
+  function hslToHex(h, s, l) {
+    h = ((h % 360) + 360) % 360 / 360;
+    s = Math.max(0, Math.min(100, s)) / 100;
+    l = Math.max(0, Math.min(100, l)) / 100;
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    let r, g, b;
+    if (s === 0) {
+      r = g = b = l;
+    } else {
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      r = hue2rgb(p, q, h + 1 / 3);
+      g = hue2rgb(p, q, h);
+      b = hue2rgb(p, q, h - 1 / 3);
+    }
+    const toHex = (n) => Math.round(n * 255).toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  }
+
+  function isDarkTheme() {
+    const explicit = document.documentElement.getAttribute("data-theme");
+    if (explicit === "dark") return true;
+    if (explicit === "light") return false;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+
+  function applyBranding(settings) {
+    document.title = settings.title || "Courage Wall";
+
+    const eyebrowEl = document.getElementById("pledge-eyebrow");
+    if (eyebrowEl) eyebrowEl.textContent = settings.eyebrow;
+    const titleEl = document.getElementById("pledge-title");
+    if (titleEl) titleEl.textContent = settings.title;
+    const taglineEl = document.getElementById("pledge-tagline");
+    if (taglineEl) taglineEl.textContent = settings.tagline;
+    const wallTitleEl = document.getElementById("wall-title");
+    if (wallTitleEl) wallTitleEl.textContent = settings.title;
+
+    const { h, s } = hexToHsl(settings.accentColor);
+    const root = document.documentElement;
+    const dark = isDarkTheme();
+    root.style.setProperty("--plum", hslToHex(h, dark ? Math.min(s, 65) : Math.max(s, 35), dark ? 78 : 30));
+    root.style.setProperty("--plum-strong", hslToHex(h, dark ? Math.min(s, 55) : Math.max(s, 40), dark ? 88 : 18));
+    root.style.setProperty("--wall-accent", hslToHex(h, Math.min(s, 65), 82));
+    root.style.setProperty("--wall-accent-strong", hslToHex(h, Math.min(s, 55), 68));
+  }
+
+  function applyBackground(bg) {
+    const el = document.getElementById("display-view");
+    if (!el) return;
+    el.style.backgroundImage = bg
+      ? `linear-gradient(rgba(23,15,31,0.78), rgba(23,15,31,0.82)), url("${bg}")`
+      : "";
+    el.style.backgroundSize = "cover";
+    el.style.backgroundPosition = "center";
+  }
+
+  function renderQR(container, text, sizePx) {
+    if (!container || !window.QRCode) return;
+    container.innerHTML = "";
+    new QRCode(container, {
+      text,
+      width: sizePx,
+      height: sizePx,
+      colorDark: "#1a1024",
+      colorLight: "#ffffff",
+    });
+  }
+
+  // Polls the combined state endpoint on an interval; returns a stop fn.
+  function pollState(intervalMs, onUpdate) {
+    let stopped = false;
+    async function tick() {
+      if (stopped) return;
+      try {
+        const state = await apiGet("/api/state");
+        onUpdate(state);
+      } catch (err) {
+        // transient network error — retry on next tick
+      }
+      if (!stopped) setTimeout(tick, intervalMs);
+    }
+    tick();
+    return () => { stopped = true; };
+  }
+
   const params = new URLSearchParams(window.location.search);
-  const view = params.get("view") || "voter";
-  ["voter", "display", "admin"].forEach((v) => {
+  const view = params.get("view") || "pledge";
+  ["pledge", "display", "admin"].forEach((v) => {
     document.getElementById(v + "-view").classList.toggle("active", v === view);
   });
 
-  // ---------- Voter view ----------
-  if (view === "voter") {
+  // ---------- Pledge view ----------
+  if (view === "pledge") {
     const list = document.getElementById("commitment-list");
     const thankYou = document.getElementById("thank-you");
+    let commitments = [];
+    let submitting = false;
 
-    COMMITMENTS.forEach((c) => {
-      const btn = document.createElement("button");
-      btn.className = "commitment-btn";
-      btn.style.background = c.color;
-      btn.textContent = c.key;
-      btn.addEventListener("click", () => submitVote(c.key, btn));
-      list.appendChild(btn);
-    });
+    function renderButtons() {
+      list.innerHTML = "";
+      commitments.forEach((c) => {
+        const btn = document.createElement("button");
+        btn.className = "commitment-btn";
+        btn.style.background = c.color;
+        btn.style.color = textColorFor(c.color);
+        btn.textContent = c.label;
+        btn.disabled = submitting;
+        btn.addEventListener("click", () => castVote(c.id));
+        list.appendChild(btn);
+      });
+    }
 
-    async function submitVote(commitment, btn) {
-      list.querySelectorAll("button").forEach((b) => (b.disabled = true));
+    async function castVote(commitmentId) {
+      if (submitting) return;
+      submitting = true;
+      renderButtons();
       try {
-        const res = await fetch(apiUrl("/api/vote"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ commitment }),
-        });
-        if (!res.ok) throw new Error("Vote failed");
+        const res = await apiSend("/api/vote", "POST", { commitmentId });
+        if (!res.ok) throw new Error("vote failed");
         list.style.display = "none";
         thankYou.classList.add("active");
       } catch (err) {
-        alert("Something went wrong submitting your vote. Please try again.");
-        list.querySelectorAll("button").forEach((b) => (b.disabled = false));
+        alert("Something went wrong submitting your pledge. Please try again.");
+        submitting = false;
+        renderButtons();
       }
     }
 
     document.getElementById("vote-again-btn").addEventListener("click", () => {
       thankYou.classList.remove("active");
-      list.style.display = "grid";
-      list.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      list.style.display = "flex";
+      submitting = false;
+      renderButtons();
+    });
+
+    pollState(4000, (state) => {
+      commitments = state.commitments;
+      renderButtons();
+      applyBranding(state.settings);
     });
   }
 
@@ -338,50 +976,48 @@
   if (view === "display") {
     const collage = document.getElementById("collage");
     const countEl = document.getElementById("display-count");
-    const emptyState = document.getElementById("empty-state");
-    const colorByCommitment = Object.fromEntries(COMMITMENTS.map((c) => [c.key, c.color]));
-    let renderedCount = 0;
+    const emptyWall = document.getElementById("empty-wall");
+    const goalBar = document.getElementById("goal-bar");
+    const goalBarFill = document.getElementById("goal-bar-fill");
+    const goalBarLabel = document.getElementById("goal-bar-label");
+    let qrRendered = false;
 
-    function seededRotation(index) {
-      // deterministic pseudo-random rotation so notes don't jitter between polls
-      const x = Math.sin(index * 999) * 10000;
-      return ((x - Math.floor(x)) * 10 - 5).toFixed(1);
-    }
-
-    function renderVotes(votes) {
-      if (votes.length < renderedCount) {
-        // votes were reset — rebuild from scratch
-        collage.innerHTML = "";
-        renderedCount = 0;
-      }
-
-      for (let i = renderedCount; i < votes.length; i++) {
-        const v = votes[i];
+    function render(state) {
+      const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
+      collage.innerHTML = "";
+      state.votes.forEach((v, i) => {
+        const c = byId[v.commitmentId];
         const note = document.createElement("div");
         note.className = "sticky-note";
-        note.style.background = colorByCommitment[v.commitment] || "#9ca3af";
+        note.style.background = c ? c.color : "#9ca3af";
+        note.style.color = c ? textColorFor(c.color) : "#ffffff";
         note.style.transform = `rotate(${seededRotation(i)}deg)`;
-        note.textContent = v.commitment;
+        note.textContent = c ? c.label : "Pledge";
         collage.appendChild(note);
-      }
-      renderedCount = votes.length;
+      });
+      countEl.textContent = state.votes.length;
+      emptyWall.style.display = state.votes.length === 0 ? "block" : "none";
 
-      countEl.textContent = votes.length;
-      emptyState.style.display = votes.length === 0 ? "block" : "none";
+      if (state.settings.goalEnabled && state.settings.goalTarget > 0) {
+        goalBar.hidden = false;
+        const pct = Math.min(100, Math.round((state.votes.length / state.settings.goalTarget) * 100));
+        goalBarFill.style.width = pct + "%";
+        goalBarLabel.textContent = `${state.votes.length} / ${state.settings.goalTarget} pledges`;
+      } else {
+        goalBar.hidden = true;
+      }
+
+      applyBranding(state.settings);
+      applyBackground(state.background);
+
+      if (!qrRendered) {
+        const voterUrl = window.location.origin + window.location.pathname + "?view=pledge";
+        renderQR(document.getElementById("display-qr-box"), voterUrl, 84);
+        qrRendered = true;
+      }
     }
 
-    async function poll() {
-      try {
-        const res = await fetch(apiUrl("/api/votes"));
-        const data = await res.json();
-        renderVotes(data.votes || []);
-      } catch (err) {
-        // silently retry on next tick
-      }
-    }
-
-    poll();
-    setInterval(poll, 1000);
+    pollState(1000, render);
   }
 
   // ---------- Admin view ----------
@@ -392,11 +1028,330 @@
     const pinError = document.getElementById("pin-error");
     const adminPanel = document.getElementById("admin-panel");
     const statsGrid = document.getElementById("stats-grid");
+    const pledgeList = document.getElementById("pledge-list");
+    const pledgeListEmpty = document.getElementById("pledge-list-empty");
+    const optionList = document.getElementById("option-list");
+    const optionResetBtn = document.getElementById("option-reset-btn");
     const demoVotesBtn = document.getElementById("demo-votes-btn");
     const resetVotesBtn = document.getElementById("reset-votes-btn");
+    const copyLinkBtn = document.getElementById("copy-link-btn");
+    const copyNote = document.getElementById("copy-note");
+    const bgPreview = document.getElementById("bg-preview");
+    const bgUploadBtn = document.getElementById("bg-upload-btn");
+    const bgClearBtn = document.getElementById("bg-clear-btn");
+    const bgFileInput = document.getElementById("bg-file-input");
+    const bgNote = document.getElementById("bg-note");
+    const eyebrowInput = document.getElementById("settings-eyebrow");
+    const titleInput = document.getElementById("settings-title");
+    const taglineInput = document.getElementById("settings-tagline");
+    const accentInput = document.getElementById("settings-accent");
+    const goalEnabledInput = document.getElementById("settings-goal-enabled");
+    const goalTargetInput = document.getElementById("settings-goal-target");
 
-    let enteredPin = "";
-    let pollHandle = null;
+    let pin = "";
+    let latestState = null;
+
+    async function refreshNow() {
+      try {
+        renderAll(await apiGet("/api/state"));
+      } catch (err) {
+        // next poll tick will retry
+      }
+    }
+
+    function renderAll(state) {
+      latestState = state;
+      renderStats(state);
+      renderPledgeList(state);
+      renderOptionEditor(state);
+      renderSettingsForm(state);
+      updateBgPreview(state.background);
+      applyBranding(state.settings);
+    }
+
+    function renderStats(state) {
+      const counts = Object.fromEntries(state.commitments.map((c) => [c.id, 0]));
+      state.votes.forEach((v) => { if (counts[v.commitmentId] !== undefined) counts[v.commitmentId]++; });
+
+      statsGrid.innerHTML = "";
+      const total = document.createElement("div");
+      total.className = "stat-card total";
+      total.innerHTML = `<div class="label">Total pledges</div><div class="value mono">${state.votes.length}</div>`;
+      statsGrid.appendChild(total);
+
+      state.commitments.forEach((c) => {
+        const card = document.createElement("div");
+        card.className = "stat-card";
+        card.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value mono">${counts[c.id] || 0}</div>`;
+        statsGrid.appendChild(card);
+      });
+    }
+
+    function renderPledgeList(state) {
+      const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
+      const sorted = [...state.votes].sort((a, b) => b.timestamp - a.timestamp);
+      pledgeList.innerHTML = "";
+
+      sorted.forEach((v) => {
+        const li = document.createElement("li");
+        li.className = "pledge-row";
+
+        const swatch = document.createElement("span");
+        swatch.className = "pledge-swatch";
+        swatch.style.background = (byId[v.commitmentId] || {}).color || "#9ca3af";
+
+        const select = document.createElement("select");
+        select.className = "pledge-select";
+        select.setAttribute("aria-label", "Reassign this pledge to a different option");
+        state.commitments.forEach((c) => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          opt.textContent = c.label;
+          if (c.id === v.commitmentId) opt.selected = true;
+          select.appendChild(opt);
+        });
+        select.addEventListener("change", async () => {
+          select.disabled = true;
+          try {
+            await apiSend(`/api/vote/${encodeURIComponent(v.id)}`, "PATCH", { pin, commitmentId: select.value });
+          } catch (err) {
+            // ignore — refreshNow reconciles either way
+          }
+          await refreshNow();
+        });
+
+        const time = document.createElement("span");
+        time.className = "pledge-time mono";
+        time.textContent = new Date(v.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+        const del = document.createElement("button");
+        del.className = "pledge-delete";
+        del.textContent = "Remove";
+        del.setAttribute("aria-label", "Remove this pledge");
+        del.addEventListener("click", async () => {
+          del.disabled = true;
+          try {
+            await apiSend(`/api/vote/${encodeURIComponent(v.id)}`, "DELETE", { pin });
+          } catch (err) {
+            // ignore — refreshNow reconciles either way
+          }
+          await refreshNow();
+        });
+
+        li.append(swatch, select, time, del);
+        pledgeList.appendChild(li);
+      });
+
+      pledgeListEmpty.style.display = sorted.length === 0 ? "block" : "none";
+    }
+
+    function renderOptionEditor(state) {
+      optionList.innerHTML = "";
+      state.commitments.forEach((c) => {
+        const row = document.createElement("div");
+        row.className = "option-row";
+
+        const colorInput = document.createElement("input");
+        colorInput.type = "color";
+        colorInput.className = "option-color";
+        colorInput.value = c.color;
+        colorInput.setAttribute("aria-label", `Color for ${c.label}`);
+        colorInput.addEventListener("change", () => commitOption(c.id, { color: colorInput.value }));
+
+        const labelInput = document.createElement("input");
+        labelInput.type = "text";
+        labelInput.className = "option-label";
+        labelInput.value = c.label;
+        labelInput.maxLength = 40;
+        labelInput.setAttribute("aria-label", "Option text");
+        labelInput.addEventListener("change", () => {
+          const value = labelInput.value.trim();
+          if (!value) { labelInput.value = c.label; return; }
+          commitOption(c.id, { label: value });
+        });
+
+        row.append(colorInput, labelInput);
+        optionList.appendChild(row);
+      });
+    }
+
+    async function commitOption(id, patch) {
+      if (!latestState) return;
+      const next = latestState.commitments.map((c) => (c.id === id ? { ...c, ...patch } : c));
+      try {
+        await apiSend("/api/commitments", "PUT", { pin, commitments: next });
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+    }
+
+    optionResetBtn.addEventListener("click", async () => {
+      if (!confirm("Reset the pledge options to their original text and colors?")) return;
+      try {
+        await apiSend("/api/commitments", "PUT", { pin, commitments: DEFAULT_COMMITMENTS });
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+    });
+
+    function renderSettingsForm(state) {
+      const s = state.settings;
+      const active = document.activeElement;
+      if (active !== eyebrowInput) eyebrowInput.value = s.eyebrow;
+      if (active !== titleInput) titleInput.value = s.title;
+      if (active !== taglineInput) taglineInput.value = s.tagline;
+      if (active !== accentInput) accentInput.value = s.accentColor;
+      if (active !== goalTargetInput) goalTargetInput.value = s.goalTarget;
+      goalEnabledInput.checked = s.goalEnabled;
+    }
+
+    async function commitSetting(patch) {
+      if (!latestState) return;
+      const next = { ...latestState.settings, ...patch };
+      try {
+        await apiSend("/api/settings", "PUT", { pin, settings: next });
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+    }
+
+    eyebrowInput.addEventListener("change", () => commitSetting({ eyebrow: eyebrowInput.value.trim() }));
+    titleInput.addEventListener("change", () => {
+      const value = titleInput.value.trim();
+      if (!value) { titleInput.value = latestState ? latestState.settings.title : ""; return; }
+      commitSetting({ title: value });
+    });
+    taglineInput.addEventListener("change", () => commitSetting({ tagline: taglineInput.value.trim() }));
+    accentInput.addEventListener("change", () => commitSetting({ accentColor: accentInput.value }));
+    goalEnabledInput.addEventListener("change", () => commitSetting({ goalEnabled: goalEnabledInput.checked }));
+    goalTargetInput.addEventListener("change", () => {
+      const fallback = latestState ? latestState.settings.goalTarget : 100;
+      const n = Math.max(1, parseInt(goalTargetInput.value, 10) || fallback);
+      goalTargetInput.value = n;
+      commitSetting({ goalTarget: n });
+    });
+
+    function updateBgPreview(bg) {
+      bgPreview.style.backgroundImage = bg ? `url("${bg}")` : "none";
+      bgPreview.classList.toggle("empty", !bg);
+      bgPreview.textContent = bg ? "" : "No image set";
+    }
+
+    function loadImageFromFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error("bad-image"));
+          img.src = reader.result;
+        };
+        reader.onerror = () => reject(new Error("bad-image"));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function drawToJpegDataUrl(img, maxDim, quality) {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      return canvas.toDataURL("image/jpeg", quality);
+    }
+
+    async function processBackgroundFile(file) {
+      if (!file.type.startsWith("image/")) throw new Error("not-an-image");
+      const img = await loadImageFromFile(file);
+      let quality = 0.82;
+      let maxDim = 1600;
+      let dataUrl = "";
+      for (let attempt = 0; attempt < 4; attempt++) {
+        dataUrl = drawToJpegDataUrl(img, maxDim, quality);
+        if (dataUrl.length < 1500000) break;
+        maxDim = Math.round(maxDim * 0.75);
+        quality = Math.max(0.5, quality - 0.12);
+      }
+      return dataUrl;
+    }
+
+    bgUploadBtn.addEventListener("click", () => bgFileInput.click());
+
+    bgFileInput.addEventListener("change", async () => {
+      const file = bgFileInput.files[0];
+      if (!file) return;
+      bgNote.textContent = "Processing…";
+      try {
+        const dataUrl = await processBackgroundFile(file);
+        const res = await apiSend("/api/background", "PUT", { pin, dataUrl });
+        if (!res.ok) throw new Error(res.status === 413 ? "too-large" : "save-failed");
+        bgNote.textContent = "Background updated.";
+      } catch (err) {
+        bgNote.textContent = err.message === "too-large"
+          ? "That image is too large — try a smaller photo."
+          : "Couldn't use that file — pick a different image.";
+      }
+      bgFileInput.value = "";
+      await refreshNow();
+      setTimeout(() => { bgNote.textContent = ""; }, 3500);
+    });
+
+    bgClearBtn.addEventListener("click", async () => {
+      try {
+        await apiSend("/api/background", "DELETE", { pin });
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+    });
+
+    demoVotesBtn.addEventListener("click", async () => {
+      if (!latestState) return;
+      demoVotesBtn.disabled = true;
+      const commitments = latestState.commitments;
+      try {
+        await Promise.all(Array.from({ length: 10 }, () => {
+          const c = commitments[Math.floor(Math.random() * commitments.length)];
+          return apiSend("/api/vote", "POST", { commitmentId: c.id });
+        }));
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+      demoVotesBtn.disabled = false;
+    });
+
+    resetVotesBtn.addEventListener("click", async () => {
+      if (!confirm("Reset all pledges? This can't be undone.")) return;
+      resetVotesBtn.disabled = true;
+      try {
+        await apiSend("/api/votes", "DELETE", { pin });
+      } catch (err) {
+        // ignore — refreshNow reconciles either way
+      }
+      await refreshNow();
+      resetVotesBtn.disabled = false;
+    });
+
+    function setupVoterLink() {
+      const url = window.location.origin + window.location.pathname + "?view=pledge";
+      document.getElementById("voter-url-text").textContent = url;
+      copyLinkBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(url);
+          copyNote.textContent = "Copied.";
+        } catch (err) {
+          copyNote.textContent = "Couldn't copy automatically — select and copy the link above.";
+        }
+        setTimeout(() => { copyNote.textContent = ""; }, 2500);
+      });
+      renderQR(document.getElementById("admin-qr-box"), url, 148);
+    }
 
     function unlock() {
       const value = pinInput.value.trim();
@@ -404,93 +1359,16 @@
         pinError.classList.add("active");
         return;
       }
-      enteredPin = value;
+      pin = value;
       pinError.classList.remove("active");
       pinGate.style.display = "none";
       adminPanel.classList.add("active");
-      setupQrCode();
-      refreshStats();
-      pollHandle = setInterval(refreshStats, 2000);
+      setupVoterLink();
+      pollState(2000, renderAll);
     }
 
     pinSubmitBtn.addEventListener("click", unlock);
-    pinInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") unlock();
-    });
-
-    async function refreshStats() {
-      try {
-        const res = await fetch(apiUrl("/api/votes"));
-        const data = await res.json();
-        const votes = data.votes || [];
-
-        const counts = Object.fromEntries(COMMITMENTS.map((c) => [c.key, 0]));
-        votes.forEach((v) => {
-          if (counts[v.commitment] !== undefined) counts[v.commitment]++;
-        });
-
-        statsGrid.innerHTML = "";
-        const total = document.createElement("div");
-        total.className = "stat-card";
-        total.innerHTML = `<div class="label">Total votes</div><div class="value">${votes.length}</div>`;
-        statsGrid.appendChild(total);
-
-        COMMITMENTS.forEach((c) => {
-          const card = document.createElement("div");
-          card.className = "stat-card";
-          card.innerHTML = `<div class="label">${c.key}</div><div class="value">${counts[c.key]}</div>`;
-          statsGrid.appendChild(card);
-        });
-      } catch (err) {
-        // ignore transient errors
-      }
-    }
-
-    function setupQrCode() {
-      const voterUrl = window.location.origin + window.location.pathname;
-      document.getElementById("voter-url-text").textContent = voterUrl;
-      new QRCode(document.getElementById("qrcode-container"), {
-        text: voterUrl,
-        width: 180,
-        height: 180,
-      });
-    }
-
-    demoVotesBtn.addEventListener("click", async () => {
-      demoVotesBtn.disabled = true;
-      try {
-        const requests = Array.from({ length: 10 }, () => {
-          const c = COMMITMENTS[Math.floor(Math.random() * COMMITMENTS.length)];
-          return fetch(apiUrl("/api/vote"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ commitment: c.key }),
-          });
-        });
-        await Promise.all(requests);
-        await refreshStats();
-      } finally {
-        demoVotesBtn.disabled = false;
-      }
-    });
-
-    resetVotesBtn.addEventListener("click", async () => {
-      if (!confirm("Reset all votes? This cannot be undone.")) return;
-      resetVotesBtn.disabled = true;
-      try {
-        const res = await fetch(apiUrl("/api/votes"), {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pin: enteredPin }),
-        });
-        if (!res.ok) throw new Error("Reset failed");
-        await refreshStats();
-      } catch (err) {
-        alert("Failed to reset votes.");
-      } finally {
-        resetVotesBtn.disabled = false;
-      }
-    });
+    pinInput.addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
   }
 })();
 </script>
