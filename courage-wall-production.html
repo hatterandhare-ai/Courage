@@ -1149,12 +1149,29 @@
     function render(state) {
       const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
       const count = state.votes.length;
+      // Set the goal bar's visibility before measuring anything below it —
+      // it sits above the collage, so its own shown/hidden state affects
+      // where the collage actually starts.
+      if (state.settings.goalEnabled && state.settings.goalTarget > 0) {
+        goalBar.hidden = false;
+        const pct = Math.min(100, Math.round((count / state.settings.goalTarget) * 100));
+        goalBarFill.style.width = pct + "%";
+        goalBarLabel.textContent = `${count} / ${state.settings.goalTarget} pledges`;
+      } else {
+        goalBar.hidden = true;
+      }
+
       let useSummary = false;
 
       if (count > 0) {
         const naturalWidth = wallScale() * 6;
         const gap = wallScale() * 0.64;
         const containerWidth = collage.clientWidth || window.innerWidth - wallScale() * 3.2;
+        // collage stays in flow at all times (see below) specifically so
+        // this measurement is always accurate — a display:none element's
+        // getBoundingClientRect() collapses to zeros, which previously
+        // made this self-referential: whichever mode last hid the
+        // collage corrupted the very measurement that decides the mode.
         const top = collage.getBoundingClientRect().top;
         const bottomPad = parseFloat(getComputedStyle(displayEl).paddingBottom) || 0;
         const containerHeight = Math.max(100, window.innerHeight - top - bottomPad);
@@ -1168,25 +1185,18 @@
       }
 
       if (useSummary || count === 0) {
-        collage.style.display = "none";
+        // Left empty (not display:none) so its position/height stays
+        // real for next render's measurement instead of collapsing.
+        collage.innerHTML = "";
+        collage.style.removeProperty("--note-w");
         categorySummary.style.display = count === 0 ? "none" : "";
         if (count > 0) renderCategorySummary(state, byId);
       } else {
-        collage.style.display = "";
         categorySummary.style.display = "none";
       }
 
       countEl.textContent = count;
       emptyWall.style.display = count === 0 ? "block" : "none";
-
-      if (state.settings.goalEnabled && state.settings.goalTarget > 0) {
-        goalBar.hidden = false;
-        const pct = Math.min(100, Math.round((count / state.settings.goalTarget) * 100));
-        goalBarFill.style.width = pct + "%";
-        goalBarLabel.textContent = `${count} / ${state.settings.goalTarget} pledges`;
-      } else {
-        goalBar.hidden = true;
-      }
 
       applyBranding(state.settings);
       applyBackground(state.background);
