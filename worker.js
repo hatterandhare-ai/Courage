@@ -14,7 +14,7 @@
  * left to race.
  *
  * Endpoints:
- *   GET    /api/state                                   -> { votes, commitments, settings, background }
+ *   GET    /api/state                                   -> { votes, commitments, settings, background, pledgeBackground }
  *                                                            (combined read, meant for polling)
  *
  *   POST   /api/vote        { commitmentId } or { text }   -> add a pledge (public) — a preset
@@ -34,6 +34,9 @@
  *   GET    /api/background                                -> { background }
  *   PUT    /api/background  { pin, dataUrl }               -> set the display background image (admin)
  *   DELETE /api/background  { pin }                        -> clear the display background image (admin)
+ *   GET    /api/pledge-background                         -> { pledgeBackground }
+ *   PUT    /api/pledge-background { pin, dataUrl }         -> set the pledge screen's background image (admin)
+ *   DELETE /api/pledge-background { pin }                  -> clear the pledge screen's background image (admin)
  *
  * Set ADMIN_PIN via wrangler.toml [vars] or a secret; falls back to "1234".
  */
@@ -42,8 +45,18 @@ const KEYS = {
   commitments: "commitments",
   settings: "settings",
   background: "background",
+  pledgeBackground: "pledgeBackground",
 };
 const VOTE_PREFIX = "vote:";
+
+// Two background image slots, same shape and rules, different screens.
+const BACKGROUND_ROUTES = {
+  "/api/background": KEYS.background,
+  "/api/pledge-background": KEYS.pledgeBackground,
+};
+function jsonKeyFor(pathname) {
+  return pathname === "/api/pledge-background" ? "pledgeBackground" : "background";
+}
 
 const DEFAULT_COMMITMENTS = [
   { id: "learn", label: "Learn more", color: "#7c3aed" },
@@ -199,13 +212,14 @@ export default {
 
     // ---- combined read, used by the display/admin polling loop ----
     if (pathname === "/api/state" && method === "GET") {
-      const [votes, commitments, settings, background] = await Promise.all([
+      const [votes, commitments, settings, background, pledgeBackground] = await Promise.all([
         listAllVotes(env),
         getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS),
         getJSON(env, KEYS.settings, DEFAULT_SETTINGS),
         getJSON(env, KEYS.background, null),
+        getJSON(env, KEYS.pledgeBackground, null),
       ]);
-      return json({ votes, commitments, settings, background });
+      return json({ votes, commitments, settings, background, pledgeBackground });
     }
 
     // ---- votes ----
@@ -307,12 +321,14 @@ export default {
       return json({ success: true, settings: next });
     }
 
-    // ---- background image (display screen backdrop) ----
-    if (pathname === "/api/background" && method === "GET") {
-      return json({ background: await getJSON(env, KEYS.background, null) });
+    // ---- background images (display wall backdrop, and separately the
+    // pledge screen's) — same shape, same rules, just two KV keys ----
+    const bgKey = BACKGROUND_ROUTES[pathname];
+    if (bgKey && method === "GET") {
+      return json({ [jsonKeyFor(pathname)]: await getJSON(env, bgKey, null) });
     }
 
-    if (pathname === "/api/background" && method === "PUT") {
+    if (bgKey && method === "PUT") {
       const body = await parseBody(request);
       if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
       const dataUrl = body?.dataUrl;
@@ -322,14 +338,14 @@ export default {
       if (dataUrl.length > 5_000_000) {
         return json({ error: "Image too large" }, 413);
       }
-      await putJSON(env, KEYS.background, dataUrl);
+      await putJSON(env, bgKey, dataUrl);
       return json({ success: true });
     }
 
-    if (pathname === "/api/background" && method === "DELETE") {
+    if (bgKey && method === "DELETE") {
       const body = await parseBody(request);
       if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
-      await env.VOTES_KV.delete(KEYS.background);
+      await env.VOTES_KV.delete(bgKey);
       return json({ success: true });
     }
 

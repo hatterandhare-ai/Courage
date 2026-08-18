@@ -751,7 +751,7 @@
 
     <div class="commitment-list" id="commitment-list"></div>
 
-    <form class="custom-pledge-form" id="custom-pledge-form" hidden>
+    <form class="custom-pledge-form" id="custom-pledge-form" style="display: none;">
       <textarea id="custom-pledge-input" class="custom-pledge-input" maxlength="100" rows="3" placeholder="Write the commitment you're making today…" required></textarea>
       <div class="custom-pledge-row">
         <span class="custom-pledge-count" id="custom-pledge-count">0 / 100</span>
@@ -882,6 +882,17 @@
       </div>
     </div>
     <div class="copy-note" id="bg-note" style="margin-top:-10px;margin-bottom:20px;"></div>
+
+    <p class="section-label">Pledge screen background</p>
+    <div class="bg-card">
+      <div class="bg-preview empty" id="pledge-bg-preview">No image set</div>
+      <div class="bg-actions">
+        <button class="secondary-btn" id="pledge-bg-upload-btn">Upload image</button>
+        <button class="secondary-btn" id="pledge-bg-clear-btn">Clear</button>
+        <input type="file" id="pledge-bg-file-input" accept="image/*" hidden />
+      </div>
+    </div>
+    <div class="copy-note" id="pledge-bg-note" style="margin-top:-10px;margin-bottom:20px;"></div>
 
     <div class="sync-badge"><span class="sync-dot" id="sync-dot"></span><span id="sync-label">Syncs live for everyone viewing the wall</span></div>
   </div>
@@ -1062,6 +1073,24 @@
     el.style.backgroundPosition = "center";
   }
 
+  // Unlike the display (always dark), the pledge screen follows the
+  // viewer's light/dark theme, so its scrim needs to match whichever
+  // one is currently active — a dark scrim on a light theme (or vice
+  // versa) would make the page background jump when the photo loads.
+  function applyPledgeBackground(bg) {
+    const el = document.getElementById("pledge-view");
+    if (!el) return;
+    if (bg) {
+      const scrim = isDarkTheme() ? "rgba(23,15,31,0.85)" : "rgba(247,244,251,0.88)";
+      el.style.backgroundImage = `linear-gradient(${scrim}, ${scrim}), url("${bg}")`;
+      el.style.backgroundSize = "cover";
+      el.style.backgroundPosition = "center";
+      el.style.backgroundAttachment = "fixed";
+    } else {
+      el.style.backgroundImage = "";
+    }
+  }
+
   function renderQR(container, text, sizePx) {
     if (!container || !window.QRCode) return;
     container.innerHTML = "";
@@ -1132,7 +1161,7 @@
         const res = await apiSend("/api/vote", "POST", body);
         if (!res.ok) throw new Error("vote failed");
         list.style.display = "none";
-        customForm.hidden = true;
+        customForm.style.display = "none";
         thankYou.classList.add("active");
       } catch (err) {
         alert("Something went wrong submitting your pledge. Please try again.");
@@ -1157,7 +1186,7 @@
       thankYou.classList.remove("active");
       submitting = false;
       if (mode === "custom") {
-        customForm.hidden = false;
+        customForm.style.display = "flex";
         customInput.value = "";
         customCount.textContent = "0 / 100";
         customSubmit.disabled = false;
@@ -1172,10 +1201,11 @@
       mode = state.settings.pledgeMode === "custom" ? "custom" : "preset";
       if (!thankYou.classList.contains("active")) {
         list.style.display = mode === "preset" ? "flex" : "none";
-        customForm.hidden = mode !== "custom";
+        customForm.style.display = mode === "custom" ? "flex" : "none";
       }
       if (mode === "preset") renderButtons();
       applyBranding(state.settings);
+      applyPledgeBackground(state.pledgeBackground);
     });
   }
 
@@ -1380,6 +1410,11 @@
     const bgClearBtn = document.getElementById("bg-clear-btn");
     const bgFileInput = document.getElementById("bg-file-input");
     const bgNote = document.getElementById("bg-note");
+    const pledgeBgPreview = document.getElementById("pledge-bg-preview");
+    const pledgeBgUploadBtn = document.getElementById("pledge-bg-upload-btn");
+    const pledgeBgClearBtn = document.getElementById("pledge-bg-clear-btn");
+    const pledgeBgFileInput = document.getElementById("pledge-bg-file-input");
+    const pledgeBgNote = document.getElementById("pledge-bg-note");
     const eyebrowInput = document.getElementById("settings-eyebrow");
     const titleInput = document.getElementById("settings-title");
     const taglineInput = document.getElementById("settings-tagline");
@@ -1407,7 +1442,8 @@
       renderPledgeList(state);
       renderOptionEditor(state);
       renderSettingsForm(state);
-      updateBgPreview(state.background);
+      updateBgPreview(bgPreview, state.background);
+      updateBgPreview(pledgeBgPreview, state.pledgeBackground);
       applyBranding(state.settings);
       optionsSection.style.display = state.settings.pledgeMode === "custom" ? "none" : "";
     }
@@ -1633,10 +1669,10 @@
     modePresetInput.addEventListener("change", () => switchPledgeMode("preset"));
     modeCustomInput.addEventListener("change", () => switchPledgeMode("custom"));
 
-    function updateBgPreview(bg) {
-      bgPreview.style.backgroundImage = bg ? `url("${bg}")` : "none";
-      bgPreview.classList.toggle("empty", !bg);
-      bgPreview.textContent = bg ? "" : "No image set";
+    function updateBgPreview(previewEl, bg) {
+      previewEl.style.backgroundImage = bg ? `url("${bg}")` : "none";
+      previewEl.classList.toggle("empty", !bg);
+      previewEl.textContent = bg ? "" : "No image set";
     }
 
     function loadImageFromFile(file) {
@@ -1679,35 +1715,40 @@
       return dataUrl;
     }
 
-    bgUploadBtn.addEventListener("click", () => bgFileInput.click());
+    function wireBackgroundControls(uploadBtn, fileInput, clearBtn, noteEl, apiPath) {
+      uploadBtn.addEventListener("click", () => fileInput.click());
 
-    bgFileInput.addEventListener("change", async () => {
-      const file = bgFileInput.files[0];
-      if (!file) return;
-      bgNote.textContent = "Processing…";
-      try {
-        const dataUrl = await processBackgroundFile(file);
-        const res = await apiSend("/api/background", "PUT", { pin, dataUrl });
-        if (!res.ok) throw new Error(res.status === 413 ? "too-large" : "save-failed");
-        bgNote.textContent = "Background updated.";
-      } catch (err) {
-        bgNote.textContent = err.message === "too-large"
-          ? "That image is too large — try a smaller photo."
-          : "Couldn't use that file — pick a different image.";
-      }
-      bgFileInput.value = "";
-      await refreshNow();
-      setTimeout(() => { bgNote.textContent = ""; }, 3500);
-    });
+      fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        noteEl.textContent = "Processing…";
+        try {
+          const dataUrl = await processBackgroundFile(file);
+          const res = await apiSend(apiPath, "PUT", { pin, dataUrl });
+          if (!res.ok) throw new Error(res.status === 413 ? "too-large" : "save-failed");
+          noteEl.textContent = "Background updated.";
+        } catch (err) {
+          noteEl.textContent = err.message === "too-large"
+            ? "That image is too large — try a smaller photo."
+            : "Couldn't use that file — pick a different image.";
+        }
+        fileInput.value = "";
+        await refreshNow();
+        setTimeout(() => { noteEl.textContent = ""; }, 3500);
+      });
 
-    bgClearBtn.addEventListener("click", async () => {
-      try {
-        await apiSend("/api/background", "DELETE", { pin });
-      } catch (err) {
-        // ignore — refreshNow reconciles either way
-      }
-      await refreshNow();
-    });
+      clearBtn.addEventListener("click", async () => {
+        try {
+          await apiSend(apiPath, "DELETE", { pin });
+        } catch (err) {
+          // ignore — refreshNow reconciles either way
+        }
+        await refreshNow();
+      });
+    }
+
+    wireBackgroundControls(bgUploadBtn, bgFileInput, bgClearBtn, bgNote, "/api/background");
+    wireBackgroundControls(pledgeBgUploadBtn, pledgeBgFileInput, pledgeBgClearBtn, pledgeBgNote, "/api/pledge-background");
 
     const DEMO_CUSTOM_PLEDGES = [
       "I will speak up in the next meeting",

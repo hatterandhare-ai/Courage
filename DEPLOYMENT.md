@@ -82,7 +82,7 @@ In the Cloudflare Pages project → **Custom domains**, add `courage.tomhawkins.
 
 - Visit `https://courage.tomhawkins.me/` (or `?view=pledge`) — the pledge view should load and submitting a commitment should succeed.
 - Visit `https://courage.tomhawkins.me/?view=display` — pledges should appear within ~1 second of being submitted, since the display polls `GET /api/state` every second.
-- Visit `https://courage.tomhawkins.me/?view=admin`, enter the PIN, and confirm stats, the pledge list (edit/remove), the pledge options editor, the pledge mode toggle, campaign branding fields, the goal toggle, background upload, the QR code, and reset all work.
+- Visit `https://courage.tomhawkins.me/?view=admin`, enter the PIN, and confirm stats, the pledge list (edit/remove), the pledge options editor, the pledge mode toggle, campaign branding fields, the goal toggle, the two background uploads (display and pledge screen), the QR code, and reset all work.
 - Toggle **Pledge mode** to "Let people write their own" and confirm the pledge view swaps to a free-text box, submissions get a random color, and the display/admin views render them correctly (including falling back to a single aggregated "Custom pledges" card, instead of six empty preset cards, once there are enough pledges to need the summary view).
 
 ## API surface
