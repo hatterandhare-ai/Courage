@@ -17,9 +17,11 @@
  *   GET    /api/state                                   -> { votes, commitments, settings, background }
  *                                                            (combined read, meant for polling)
  *
- *   POST   /api/vote        { commitmentId }             -> add a pledge (public)
+ *   POST   /api/vote        { commitmentId } or { text }   -> add a pledge (public) — a preset
+ *                                                            pick or a custom pledge (randomly
+ *                                                            colored server-side)
  *   GET    /api/votes                                    -> { votes: [...] }
- *   PATCH  /api/vote/:id    { pin, commitmentId }         -> reassign one pledge (admin)
+ *   PATCH  /api/vote/:id    { pin, commitmentId|text }    -> edit one pledge (admin)
  *   DELETE /api/vote/:id    { pin }                       -> remove one pledge (admin)
  *   DELETE /api/votes       { pin }                       -> clear all pledges (admin)
  *
@@ -59,7 +61,18 @@ const DEFAULT_SETTINGS = {
   accentColor: "#4C1D6B",
   goalEnabled: false,
   goalTarget: 100,
+  // "preset" = pick one of the commitments above; "custom" = write your
+  // own pledge, colored randomly from RANDOM_PLEDGE_COLORS below.
+  pledgeMode: "preset",
 };
+
+// Colors assigned to custom-written pledges, one at random per pledge.
+// A superset of the preset commitment colors (plus a couple more) rather
+// than a truly arbitrary RGB pick, so custom pledges still read as part
+// of the same visual system instead of clashing with it.
+const RANDOM_PLEDGE_COLORS = [
+  "#7c3aed", "#3b82f6", "#10b981", "#f59e0b", "#f97316", "#ef4444", "#ec4899", "#14b8a6",
+];
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -160,7 +173,18 @@ function sanitizeSettings(incoming, current) {
       Number.isFinite(incoming?.goalTarget) && incoming.goalTarget > 0
         ? Math.floor(incoming.goalTarget)
         : current.goalTarget,
+    pledgeMode: incoming?.pledgeMode === "custom" || incoming?.pledgeMode === "preset" ? incoming.pledgeMode : current.pledgeMode,
   };
+}
+
+function sanitizePledgeText(text) {
+  if (typeof text !== "string") return null;
+  const trimmed = text.trim().slice(0, 100);
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function randomPledgeColor() {
+  return RANDOM_PLEDGE_COLORS[Math.floor(Math.random() * RANDOM_PLEDGE_COLORS.length)];
 }
 
 export default {
@@ -185,13 +209,27 @@ export default {
     }
 
     // ---- votes ----
+    // A pledge is either { commitmentId } (picked one of the preset
+    // options) or { text } (wrote their own, colored randomly server-side
+    // so the color can't be spoofed by the client). Which shape a
+    // request uses is inferred from its body, not from the *current*
+    // settings.pledgeMode — that way a submission already in flight when
+    // the admin flips the mode still saves correctly instead of failing.
     if (pathname === "/api/vote" && method === "POST") {
       const body = await parseBody(request);
+      const id = makeId();
+
+      if (typeof body?.text === "string") {
+        const text = sanitizePledgeText(body.text);
+        if (!text) return json({ error: "Invalid pledge text" }, 400);
+        await putJSON(env, VOTE_PREFIX + id, { id, text, color: randomPledgeColor(), timestamp: Date.now() });
+        return json({ success: true });
+      }
+
       const commitments = await getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS);
       if (!commitments.some((c) => c.id === body?.commitmentId)) {
         return json({ error: "Invalid commitmentId" }, 400);
       }
-      const id = makeId();
       // Its own key — never contends with any other vote's write.
       await putJSON(env, VOTE_PREFIX + id, { id, commitmentId: body.commitmentId, timestamp: Date.now() });
       return json({ success: true });
@@ -220,14 +258,24 @@ export default {
         return json({ success: true });
       }
 
+      const target = await getJSON(env, key, null);
+      if (!target) return json({ error: "Not found" }, 404);
+
+      // PATCH replaces the pledge's shape entirely (never a mix of both)
+      // — editing its text keeps the pledge a custom one, editing its
+      // commitmentId keeps it a preset one.
+      if (typeof body?.text === "string") {
+        const text = sanitizePledgeText(body.text);
+        if (!text) return json({ error: "Invalid pledge text" }, 400);
+        await putJSON(env, key, { id: target.id, text, color: target.color || randomPledgeColor(), timestamp: target.timestamp });
+        return json({ success: true });
+      }
+
       const commitments = await getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS);
       if (!commitments.some((c) => c.id === body?.commitmentId)) {
         return json({ error: "Invalid commitmentId" }, 400);
       }
-      const target = await getJSON(env, key, null);
-      if (!target) return json({ error: "Not found" }, 404);
-      target.commitmentId = body.commitmentId;
-      await putJSON(env, key, target);
+      await putJSON(env, key, { id: target.id, commitmentId: body.commitmentId, timestamp: target.timestamp });
       return json({ success: true });
     }
 

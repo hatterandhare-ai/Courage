@@ -166,6 +166,34 @@
   .commitment-btn:active { transform: translateY(0) scale(0.99); }
   .commitment-btn:disabled { opacity: 0.55; cursor: default; transform: none; }
 
+  .custom-pledge-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .custom-pledge-input {
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--line);
+    background: var(--paper-card);
+    color: var(--ink);
+    resize: vertical;
+    min-height: 90px;
+  }
+  .custom-pledge-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .custom-pledge-count {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
   .thank-you {
     display: none;
     text-align: center;
@@ -536,6 +564,40 @@
   .toggle-label input { width: 16px; height: 16px; cursor: pointer; }
   .goal-target-input { width: 90px; }
 
+  .mode-toggle {
+    display: inline-flex;
+    background: var(--paper-alt);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 3px;
+    margin-bottom: 30px;
+  }
+  .mode-option {
+    position: relative;
+    cursor: pointer;
+  }
+  .mode-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .mode-option span {
+    display: block;
+    padding: 9px 18px;
+    border-radius: 999px;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--ink-soft);
+  }
+  .mode-option input:checked + span {
+    background: var(--plum);
+    color: var(--paper);
+  }
+  .mode-option input:focus-visible + span {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
+  }
+
   .options-card {
     background: var(--paper-card);
     border: 1px solid var(--line);
@@ -689,6 +751,14 @@
 
     <div class="commitment-list" id="commitment-list"></div>
 
+    <form class="custom-pledge-form" id="custom-pledge-form" hidden>
+      <textarea id="custom-pledge-input" class="custom-pledge-input" maxlength="100" rows="3" placeholder="Write the commitment you're making today…" required></textarea>
+      <div class="custom-pledge-row">
+        <span class="custom-pledge-count" id="custom-pledge-count">0 / 100</span>
+        <button type="submit" class="primary-btn" id="custom-pledge-submit">Add my pledge</button>
+      </div>
+    </form>
+
     <div class="thank-you" id="thank-you">
       <div class="stamp">💜</div>
       <h2>Thank you</h2>
@@ -756,13 +826,27 @@
       </div>
     </div>
 
+    <p class="section-label">Pledge mode</p>
+    <div class="mode-toggle" id="mode-toggle" role="radiogroup" aria-label="Pledge mode">
+      <label class="mode-option">
+        <input type="radio" name="pledge-mode" id="mode-preset" value="preset" />
+        <span>Set pledges</span>
+      </label>
+      <label class="mode-option">
+        <input type="radio" name="pledge-mode" id="mode-custom" value="custom" />
+        <span>Let people write their own</span>
+      </label>
+    </div>
+
     <p class="section-label">Live stats</p>
     <div class="stats-grid" id="stats-grid"></div>
 
-    <p class="section-label">Pledge options</p>
-    <div class="options-card">
-      <div class="option-list" id="option-list"></div>
-      <button class="secondary-btn" id="option-reset-btn">Reset to defaults</button>
+    <div id="options-section">
+      <p class="section-label">Pledge options</p>
+      <div class="options-card">
+        <div class="option-list" id="option-list"></div>
+        <button class="secondary-btn" id="option-reset-btn">Reset to defaults</button>
+      </div>
     </div>
 
     <p class="section-label">Pledges</p>
@@ -1016,8 +1100,13 @@
   // ---------- Pledge view ----------
   if (view === "pledge") {
     const list = document.getElementById("commitment-list");
+    const customForm = document.getElementById("custom-pledge-form");
+    const customInput = document.getElementById("custom-pledge-input");
+    const customCount = document.getElementById("custom-pledge-count");
+    const customSubmit = document.getElementById("custom-pledge-submit");
     const thankYou = document.getElementById("thank-you");
     let commitments = [];
+    let mode = "preset";
     let submitting = false;
 
     function renderButtons() {
@@ -1029,37 +1118,63 @@
         btn.style.color = textColorFor(c.color);
         btn.textContent = c.label;
         btn.disabled = submitting;
-        btn.addEventListener("click", () => castVote(c.id));
+        btn.addEventListener("click", () => submitPledge({ commitmentId: c.id }));
         list.appendChild(btn);
       });
     }
 
-    async function castVote(commitmentId) {
+    async function submitPledge(body) {
       if (submitting) return;
       submitting = true;
       renderButtons();
+      customSubmit.disabled = true;
       try {
-        const res = await apiSend("/api/vote", "POST", { commitmentId });
+        const res = await apiSend("/api/vote", "POST", body);
         if (!res.ok) throw new Error("vote failed");
         list.style.display = "none";
+        customForm.hidden = true;
         thankYou.classList.add("active");
       } catch (err) {
         alert("Something went wrong submitting your pledge. Please try again.");
         submitting = false;
         renderButtons();
+        customSubmit.disabled = false;
       }
     }
 
+    customInput.addEventListener("input", () => {
+      customCount.textContent = `${customInput.value.length} / 100`;
+    });
+
+    customForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = customInput.value.trim();
+      if (!text) return;
+      submitPledge({ text });
+    });
+
     document.getElementById("vote-again-btn").addEventListener("click", () => {
       thankYou.classList.remove("active");
-      list.style.display = "flex";
       submitting = false;
-      renderButtons();
+      if (mode === "custom") {
+        customForm.hidden = false;
+        customInput.value = "";
+        customCount.textContent = "0 / 100";
+        customSubmit.disabled = false;
+      } else {
+        list.style.display = "flex";
+        renderButtons();
+      }
     });
 
     pollState(4000, (state) => {
       commitments = state.commitments;
-      renderButtons();
+      mode = state.settings.pledgeMode === "custom" ? "custom" : "preset";
+      if (!thankYou.classList.contains("active")) {
+        list.style.display = mode === "preset" ? "flex" : "none";
+        customForm.hidden = mode !== "custom";
+      }
+      if (mode === "preset") renderButtons();
       applyBranding(state.settings);
     });
   }
@@ -1086,64 +1201,97 @@
     // dot cluster itself doesn't also become unreadable.
     const DOT_CAP = 140;
 
+    // A pledge is either a preset pick (look up its commitment's label
+    // and color) or a custom one (already carries its own text/color).
+    function pledgeVisual(v, byId) {
+      if (v.commitmentId) {
+        const c = byId[v.commitmentId];
+        return { label: c ? c.label : "Pledge", color: c ? c.color : "#9ca3af" };
+      }
+      return { label: v.text || "Pledge", color: v.color || "#9ca3af" };
+    }
+
     function renderNotes(state, byId, noteWidth) {
       collage.style.setProperty("--note-w", noteWidth ? noteWidth + "px" : "");
       collage.innerHTML = "";
       state.votes.forEach((v, i) => {
-        const c = byId[v.commitmentId];
+        const { label, color } = pledgeVisual(v, byId);
         const note = document.createElement("div");
         note.className = "sticky-note";
-        note.style.background = c ? c.color : "#9ca3af";
-        note.style.color = c ? textColorFor(c.color) : "#ffffff";
+        note.style.background = color;
+        note.style.color = textColorFor(color);
         note.style.transform = `rotate(${seededRotation(i)}deg)`;
-        note.textContent = c ? c.label : "Pledge";
+        note.textContent = label;
         collage.appendChild(note);
       });
     }
 
-    function renderCategorySummary(state, byId) {
+    function appendCategoryCard(label, swatchColor, count, dotColors) {
+      const card = document.createElement("div");
+      card.className = "category-card";
+
+      const head = document.createElement("div");
+      head.className = "category-head";
+      const swatch = document.createElement("span");
+      swatch.className = "category-swatch";
+      swatch.style.background = swatchColor;
+      const labelEl = document.createElement("span");
+      labelEl.className = "category-label";
+      labelEl.textContent = label;
+      const num = document.createElement("span");
+      num.className = "category-count mono";
+      num.textContent = count;
+      head.append(swatch, labelEl, num);
+
+      const dots = document.createElement("div");
+      dots.className = "category-dots";
+      const perDot = count > DOT_CAP ? Math.ceil(count / DOT_CAP) : 1;
+      const dotCount = perDot > 1 ? Math.ceil(count / perDot) : count;
+      for (let i = 0; i < dotCount; i++) {
+        const dot = document.createElement("span");
+        dot.className = "category-dot";
+        // Sample the color list evenly so a scaled-down cluster still
+        // reflects the real color mix, not just its first few entries.
+        const idx = dotColors.length ? Math.min(dotColors.length - 1, Math.floor((i / dotCount) * dotColors.length)) : 0;
+        dot.style.background = dotColors[idx] || swatchColor;
+        dots.appendChild(dot);
+      }
+
+      card.append(head, dots);
+      if (perDot > 1) {
+        const legend = document.createElement("div");
+        legend.className = "category-legend";
+        legend.textContent = `● = ${perDot} pledges`;
+        card.appendChild(legend);
+      }
+      categorySummary.appendChild(card);
+    }
+
+    // Preset pledges group by their commitment as before. Custom pledges
+    // have no fixed category to group by — each one picked its own
+    // random color — so they're pooled into a single card whose dots
+    // sample those actual colors instead of pretending there's one
+    // "custom" color.
+    function renderCategorySummary(state) {
+      categorySummary.innerHTML = "";
+      const customVotes = state.votes.filter((v) => !v.commitmentId);
+      const presetVoteCount = state.votes.length - customVotes.length;
       const counts = Object.fromEntries(state.commitments.map((c) => [c.id, 0]));
       state.votes.forEach((v) => { if (counts[v.commitmentId] !== undefined) counts[v.commitmentId]++; });
 
-      categorySummary.innerHTML = "";
-      state.commitments.forEach((c) => {
-        const count = counts[c.id] || 0;
-        const card = document.createElement("div");
-        card.className = "category-card";
+      // Skip the preset option cards entirely when nobody's used any of
+      // them — mainly custom mode, where six empty "0" cards above the
+      // one card that actually has pledges would just be noise.
+      if (presetVoteCount > 0) {
+        state.commitments.forEach((c) => {
+          const count = counts[c.id] || 0;
+          appendCategoryCard(c.label, c.color, count, Array(count).fill(c.color));
+        });
+      }
 
-        const head = document.createElement("div");
-        head.className = "category-head";
-        const swatch = document.createElement("span");
-        swatch.className = "category-swatch";
-        swatch.style.background = c.color;
-        const label = document.createElement("span");
-        label.className = "category-label";
-        label.textContent = c.label;
-        const num = document.createElement("span");
-        num.className = "category-count mono";
-        num.textContent = count;
-        head.append(swatch, label, num);
-
-        const dots = document.createElement("div");
-        dots.className = "category-dots";
-        const perDot = count > DOT_CAP ? Math.ceil(count / DOT_CAP) : 1;
-        const dotCount = perDot > 1 ? Math.ceil(count / perDot) : count;
-        for (let i = 0; i < dotCount; i++) {
-          const dot = document.createElement("span");
-          dot.className = "category-dot";
-          dot.style.background = c.color;
-          dots.appendChild(dot);
-        }
-
-        card.append(head, dots);
-        if (perDot > 1) {
-          const legend = document.createElement("div");
-          legend.className = "category-legend";
-          legend.textContent = `● = ${perDot} pledges`;
-          card.appendChild(legend);
-        }
-        categorySummary.appendChild(card);
-      });
+      if (customVotes.length > 0) {
+        appendCategoryCard("Custom pledges", "#C9A6EA", customVotes.length, customVotes.map((v) => v.color || "#9ca3af"));
+      }
     }
 
     function render(state) {
@@ -1190,7 +1338,7 @@
         collage.innerHTML = "";
         collage.style.removeProperty("--note-w");
         categorySummary.style.display = count === 0 ? "none" : "";
-        if (count > 0) renderCategorySummary(state, byId);
+        if (count > 0) renderCategorySummary(state);
       } else {
         categorySummary.style.display = "none";
       }
@@ -1238,6 +1386,9 @@
     const accentInput = document.getElementById("settings-accent");
     const goalEnabledInput = document.getElementById("settings-goal-enabled");
     const goalTargetInput = document.getElementById("settings-goal-target");
+    const modePresetInput = document.getElementById("mode-preset");
+    const modeCustomInput = document.getElementById("mode-custom");
+    const optionsSection = document.getElementById("options-section");
 
     let pin = "";
     let latestState = null;
@@ -1258,11 +1409,16 @@
       renderSettingsForm(state);
       updateBgPreview(state.background);
       applyBranding(state.settings);
+      optionsSection.style.display = state.settings.pledgeMode === "custom" ? "none" : "";
     }
 
     function renderStats(state) {
       const counts = Object.fromEntries(state.commitments.map((c) => [c.id, 0]));
-      state.votes.forEach((v) => { if (counts[v.commitmentId] !== undefined) counts[v.commitmentId]++; });
+      let customCount = 0;
+      state.votes.forEach((v) => {
+        if (v.commitmentId && counts[v.commitmentId] !== undefined) counts[v.commitmentId]++;
+        else if (!v.commitmentId) customCount++;
+      });
 
       statsGrid.innerHTML = "";
       const total = document.createElement("div");
@@ -1270,12 +1426,23 @@
       total.innerHTML = `<div class="label">Total pledges</div><div class="value mono">${state.votes.length}</div>`;
       statsGrid.appendChild(total);
 
-      state.commitments.forEach((c) => {
+      // Consistent with hiding the pledge-options editor in custom mode:
+      // don't clutter the stats with six always-zero preset cards either.
+      if (state.settings.pledgeMode !== "custom") {
+        state.commitments.forEach((c) => {
+          const card = document.createElement("div");
+          card.className = "stat-card";
+          card.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value mono">${counts[c.id] || 0}</div>`;
+          statsGrid.appendChild(card);
+        });
+      }
+
+      if (customCount > 0) {
         const card = document.createElement("div");
         card.className = "stat-card";
-        card.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value mono">${counts[c.id] || 0}</div>`;
+        card.innerHTML = `<div class="label">Custom pledges</div><div class="value mono">${customCount}</div>`;
         statsGrid.appendChild(card);
-      });
+      }
     }
 
     function renderPledgeList(state) {
@@ -1289,27 +1456,48 @@
 
         const swatch = document.createElement("span");
         swatch.className = "pledge-swatch";
-        swatch.style.background = (byId[v.commitmentId] || {}).color || "#9ca3af";
+        swatch.style.background = v.commitmentId ? (byId[v.commitmentId] || {}).color || "#9ca3af" : v.color || "#9ca3af";
 
-        const select = document.createElement("select");
-        select.className = "pledge-select";
-        select.setAttribute("aria-label", "Reassign this pledge to a different option");
-        state.commitments.forEach((c) => {
-          const opt = document.createElement("option");
-          opt.value = c.id;
-          opt.textContent = c.label;
-          if (c.id === v.commitmentId) opt.selected = true;
-          select.appendChild(opt);
-        });
-        select.addEventListener("change", async () => {
-          select.disabled = true;
-          try {
-            await apiSend(`/api/vote/${encodeURIComponent(v.id)}`, "PATCH", { pin, commitmentId: select.value });
-          } catch (err) {
-            // ignore — refreshNow reconciles either way
-          }
-          await refreshNow();
-        });
+        let editor;
+        if (v.commitmentId) {
+          editor = document.createElement("select");
+          editor.className = "pledge-select";
+          editor.setAttribute("aria-label", "Reassign this pledge to a different option");
+          state.commitments.forEach((c) => {
+            const opt = document.createElement("option");
+            opt.value = c.id;
+            opt.textContent = c.label;
+            if (c.id === v.commitmentId) opt.selected = true;
+            editor.appendChild(opt);
+          });
+          editor.addEventListener("change", async () => {
+            editor.disabled = true;
+            try {
+              await apiSend(`/api/vote/${encodeURIComponent(v.id)}`, "PATCH", { pin, commitmentId: editor.value });
+            } catch (err) {
+              // ignore — refreshNow reconciles either way
+            }
+            await refreshNow();
+          });
+        } else {
+          editor = document.createElement("input");
+          editor.type = "text";
+          editor.className = "pledge-select";
+          editor.maxLength = 100;
+          editor.value = v.text || "";
+          editor.setAttribute("aria-label", "Edit this pledge's text");
+          editor.addEventListener("change", async () => {
+            const text = editor.value.trim();
+            if (!text) { editor.value = v.text || ""; return; }
+            editor.disabled = true;
+            try {
+              await apiSend(`/api/vote/${encodeURIComponent(v.id)}`, "PATCH", { pin, text });
+            } catch (err) {
+              // ignore — refreshNow reconciles either way
+            }
+            await refreshNow();
+          });
+        }
 
         const time = document.createElement("span");
         time.className = "pledge-time mono";
@@ -1329,7 +1517,7 @@
           await refreshNow();
         });
 
-        li.append(swatch, select, time, del);
+        li.append(swatch, editor, time, del);
         pledgeList.appendChild(li);
       });
 
@@ -1396,6 +1584,8 @@
       if (active !== accentInput) accentInput.value = s.accentColor;
       if (active !== goalTargetInput) goalTargetInput.value = s.goalTarget;
       goalEnabledInput.checked = s.goalEnabled;
+      modePresetInput.checked = s.pledgeMode !== "custom";
+      modeCustomInput.checked = s.pledgeMode === "custom";
     }
 
     async function commitSetting(patch) {
@@ -1424,6 +1614,24 @@
       goalTargetInput.value = n;
       commitSetting({ goalTarget: n });
     });
+    const DEFAULT_TAGLINES = {
+      preset: "Pick one commitment you're making today. It'll land on the wall right away.",
+      custom: "Write the commitment you're making today. It'll land on the wall right away.",
+    };
+
+    function switchPledgeMode(mode) {
+      const patch = { pledgeMode: mode };
+      const otherMode = mode === "preset" ? "custom" : "preset";
+      // Only swap the tagline if it's still that untouched default —
+      // never overwrite a tagline the admin actually wrote themselves.
+      if (latestState && latestState.settings.tagline === DEFAULT_TAGLINES[otherMode]) {
+        patch.tagline = DEFAULT_TAGLINES[mode];
+      }
+      commitSetting(patch);
+    }
+
+    modePresetInput.addEventListener("change", () => switchPledgeMode("preset"));
+    modeCustomInput.addEventListener("change", () => switchPledgeMode("custom"));
 
     function updateBgPreview(bg) {
       bgPreview.style.backgroundImage = bg ? `url("${bg}")` : "none";
@@ -1501,15 +1709,32 @@
       await refreshNow();
     });
 
+    const DEMO_CUSTOM_PLEDGES = [
+      "I will speak up in the next meeting",
+      "I will mentor someone new to the team",
+      "I will ask for help when I need it",
+      "I will share my story with a colleague",
+      "I will challenge an assumption I hear",
+      "I will support someone going through a hard time",
+      "I will learn something new about allyship",
+      "I will call out bias when I see it",
+      "I will check in on a teammate today",
+      "I will celebrate someone else's win",
+    ];
+
     demoVotesBtn.addEventListener("click", async () => {
       if (!latestState) return;
       demoVotesBtn.disabled = true;
-      const commitments = latestState.commitments;
       try {
-        await Promise.all(Array.from({ length: 10 }, () => {
-          const c = commitments[Math.floor(Math.random() * commitments.length)];
-          return apiSend("/api/vote", "POST", { commitmentId: c.id });
-        }));
+        if (latestState.settings.pledgeMode === "custom") {
+          await Promise.all(DEMO_CUSTOM_PLEDGES.map((text) => apiSend("/api/vote", "POST", { text })));
+        } else {
+          const commitments = latestState.commitments;
+          await Promise.all(Array.from({ length: 10 }, () => {
+            const c = commitments[Math.floor(Math.random() * commitments.length)];
+            return apiSend("/api/vote", "POST", { commitmentId: c.id });
+          }));
+        }
       } catch (err) {
         // ignore — refreshNow reconciles either way
       }
