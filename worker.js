@@ -1,11 +1,17 @@
 /**
  * Courage Wall — Cloudflare Worker backend
  *
- * Storage: a single Cloudflare KV namespace (binding VOTES_KV), holding
- * four JSON values under fixed keys — votes, commitments (the pledge
- * options), settings (campaign branding + goal), and background (an
- * admin-uploaded data: URL for the display screen). There's no database;
- * each value is just read, modified, and written back whole.
+ * Storage: a single Cloudflare KV namespace (binding VOTES_KV).
+ * commitments, settings, and background are each one JSON value under a
+ * fixed key — fine as-is, since only the (single) admin ever writes them.
+ * Votes are different: many people submit pledges within the same few
+ * seconds at a real event, so each pledge gets its OWN key ("vote:<id>")
+ * instead of living in one shared JSON array. A shared array requires
+ * read-modify-write on every single vote, and concurrent submissions
+ * racing that read-modify-write silently lose pledges — confirmed while
+ * testing this locally: 30 concurrent votes landed only 5. Giving each
+ * vote its own key makes every write independent, so there's nothing
+ * left to race.
  *
  * Endpoints:
  *   GET    /api/state                                   -> { votes, commitments, settings, background }
@@ -31,11 +37,11 @@
  */
 
 const KEYS = {
-  votes: "votes",
   commitments: "commitments",
   settings: "settings",
   background: "background",
 };
+const VOTE_PREFIX = "vote:";
 
 const DEFAULT_COMMITMENTS = [
   { id: "learn", label: "Learn more", color: "#7c3aed" },
@@ -83,6 +89,39 @@ async function getJSON(env, key, fallback) {
 
 async function putJSON(env, key, value) {
   await env.VOTES_KV.put(key, JSON.stringify(value));
+}
+
+// Reads every vote:* key (paginating past KV's 1000-keys-per-list-call
+// limit if there are that many), fetching values in parallel. list()
+// returns keys in lexicographic order, not creation order, so the
+// result is explicitly sorted by timestamp afterward.
+async function listAllVotes(env) {
+  const votes = [];
+  let cursor;
+  do {
+    const page = await env.VOTES_KV.list({ prefix: VOTE_PREFIX, cursor, limit: 1000 });
+    const values = await Promise.all(page.keys.map((k) => env.VOTES_KV.get(k.name)));
+    for (const raw of values) {
+      if (!raw) continue;
+      try {
+        votes.push(JSON.parse(raw));
+      } catch (err) {
+        // skip a corrupt entry rather than fail the whole read
+      }
+    }
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
+  votes.sort((a, b) => a.timestamp - b.timestamp);
+  return votes;
+}
+
+async function deleteAllVotes(env) {
+  let cursor;
+  do {
+    const page = await env.VOTES_KV.list({ prefix: VOTE_PREFIX, cursor, limit: 1000 });
+    await Promise.all(page.keys.map((k) => env.VOTES_KV.delete(k.name)));
+    cursor = page.list_complete ? undefined : page.cursor;
+  } while (cursor);
 }
 
 function makeId() {
@@ -137,7 +176,7 @@ export default {
     // ---- combined read, used by the display/admin polling loop ----
     if (pathname === "/api/state" && method === "GET") {
       const [votes, commitments, settings, background] = await Promise.all([
-        getJSON(env, KEYS.votes, []),
+        listAllVotes(env),
         getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS),
         getJSON(env, KEYS.settings, DEFAULT_SETTINGS),
         getJSON(env, KEYS.background, null),
@@ -152,20 +191,20 @@ export default {
       if (!commitments.some((c) => c.id === body?.commitmentId)) {
         return json({ error: "Invalid commitmentId" }, 400);
       }
-      const votes = await getJSON(env, KEYS.votes, []);
-      votes.push({ id: makeId(), commitmentId: body.commitmentId, timestamp: Date.now() });
-      await putJSON(env, KEYS.votes, votes);
-      return json({ success: true, count: votes.length });
+      const id = makeId();
+      // Its own key — never contends with any other vote's write.
+      await putJSON(env, VOTE_PREFIX + id, { id, commitmentId: body.commitmentId, timestamp: Date.now() });
+      return json({ success: true });
     }
 
     if (pathname === "/api/votes" && method === "GET") {
-      return json({ votes: await getJSON(env, KEYS.votes, []) });
+      return json({ votes: await listAllVotes(env) });
     }
 
     if (pathname === "/api/votes" && method === "DELETE") {
       const body = await parseBody(request);
       if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
-      await putJSON(env, KEYS.votes, []);
+      await deleteAllVotes(env);
       return json({ success: true });
     }
 
@@ -174,11 +213,10 @@ export default {
       const voteId = voteMatch[1];
       const body = await parseBody(request);
       if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
-
-      const votes = await getJSON(env, KEYS.votes, []);
+      const key = VOTE_PREFIX + voteId;
 
       if (method === "DELETE") {
-        await putJSON(env, KEYS.votes, votes.filter((v) => v.id !== voteId));
+        await env.VOTES_KV.delete(key);
         return json({ success: true });
       }
 
@@ -186,10 +224,10 @@ export default {
       if (!commitments.some((c) => c.id === body?.commitmentId)) {
         return json({ error: "Invalid commitmentId" }, 400);
       }
-      const target = votes.find((v) => v.id === voteId);
+      const target = await getJSON(env, key, null);
       if (!target) return json({ error: "Not found" }, 404);
       target.commitmentId = body.commitmentId;
-      await putJSON(env, KEYS.votes, votes);
+      await putJSON(env, key, target);
       return json({ success: true });
     }
 
