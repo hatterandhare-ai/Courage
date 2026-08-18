@@ -253,11 +253,15 @@
     align-content: flex-start;
   }
   .sticky-note {
-    width: calc(var(--wall-scale) * 6);
-    min-height: calc(var(--wall-scale) * 3.8);
-    padding: calc(var(--wall-scale) * 0.48);
+    /* --note-w is set in JS each render, from whichever is smaller: the
+       screen-driven size above, or the size needed for every pledge to
+       still fit on screen at once. The var() fallback is only what's
+       visible before the first render (or if JS fails). */
+    width: var(--note-w, calc(var(--wall-scale) * 6));
+    aspect-ratio: 6 / 3.8;
+    padding: calc(var(--note-w, calc(var(--wall-scale) * 6)) * 0.08);
     border-radius: 3px;
-    font-size: calc(var(--wall-scale) * 0.52);
+    font-size: calc(var(--note-w, calc(var(--wall-scale) * 6)) * 0.0867);
     font-weight: 600;
     box-shadow: 0 6px 14px rgba(0,0,0,0.4);
     display: flex;
@@ -272,6 +276,62 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .sticky-note { animation: none; }
+  }
+
+  /* Fallback for when there are too many pledges for individual notes to
+     stay legible: one card per pledge option instead of one tile per
+     pledge, with a cluster of dots standing in for the count. */
+  .category-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(calc(var(--wall-scale) * 8), 1fr));
+    gap: calc(var(--wall-scale) * 0.6);
+  }
+  .category-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(243, 238, 250, 0.14);
+    border-radius: calc(var(--wall-scale) * 0.3);
+    padding: calc(var(--wall-scale) * 0.55);
+  }
+  .category-head {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--wall-scale) * 0.32);
+    margin-bottom: calc(var(--wall-scale) * 0.45);
+  }
+  .category-swatch {
+    width: calc(var(--wall-scale) * 0.5);
+    height: calc(var(--wall-scale) * 0.5);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .category-label {
+    flex: 1;
+    min-width: 0;
+    font-size: calc(var(--wall-scale) * 0.58);
+    font-weight: 600;
+    color: #F3EEFA;
+  }
+  .category-count {
+    font-size: calc(var(--wall-scale) * 0.76);
+    font-weight: 600;
+    color: var(--wall-accent, #E4D2F7);
+    flex-shrink: 0;
+  }
+  .category-dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: calc(var(--wall-scale) * 0.12);
+  }
+  .category-dot {
+    width: calc(var(--wall-scale) * 0.22);
+    height: calc(var(--wall-scale) * 0.22);
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .category-legend {
+    margin-top: calc(var(--wall-scale) * 0.35);
+    font-size: calc(var(--wall-scale) * 0.4);
+    color: #9F8DB6;
   }
 
   .empty-wall {
@@ -652,6 +712,7 @@
   </div>
 
   <div class="collage" id="collage"></div>
+  <div class="category-summary" id="category-summary" style="display: none;"></div>
   <div class="empty-wall" id="empty-wall">No pledges yet — be the first to add one.</div>
 
   <div class="display-qr">
@@ -795,6 +856,23 @@
   function wallScale() {
     const w = window.innerWidth;
     return Math.max(20, Math.min(40, 9.6 + 0.011 * w));
+  }
+
+  // Finds the largest note width that lets `count` notes of the given
+  // aspect ratio all fit within containerWidth x containerHeight, tried
+  // as a simple grid (some number of equal-width columns, wrapping to
+  // enough rows). Returns 0 if nothing reasonable fits.
+  function computeFitWidth(count, containerWidth, containerHeight, gap, aspect) {
+    let best = 0;
+    for (let cols = 1; cols <= count; cols++) {
+      const rows = Math.ceil(count / cols);
+      const width = (containerWidth - (cols - 1) * gap) / cols;
+      if (width <= 0) continue;
+      const height = width / aspect;
+      const totalHeight = rows * height + (rows - 1) * gap;
+      if (totalHeight <= containerHeight && width > best) best = width;
+    }
+    return best;
   }
 
   function textColorFor(hex) {
@@ -988,7 +1066,9 @@
 
   // ---------- Display view ----------
   if (view === "display") {
+    const displayEl = document.getElementById("display-view");
     const collage = document.getElementById("collage");
+    const categorySummary = document.getElementById("category-summary");
     const countEl = document.getElementById("display-count");
     const emptyWall = document.getElementById("empty-wall");
     const goalBar = document.getElementById("goal-bar");
@@ -996,8 +1076,18 @@
     const goalBarLabel = document.getElementById("goal-bar-label");
     let qrRendered = false;
 
-    function render(state) {
-      const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
+    const NOTE_ASPECT = 6 / 3.8;
+    // Below this width a note's label stops being legibly readable at a
+    // glance — the point where individual tiles stop making sense and
+    // the category summary takes over instead.
+    const NOTE_MIN_WIDTH = 110;
+    // Past this many pledges in one category, a dot stops meaning "one
+    // pledge" and starts meaning "this many pledges" instead, so the
+    // dot cluster itself doesn't also become unreadable.
+    const DOT_CAP = 140;
+
+    function renderNotes(state, byId, noteWidth) {
+      collage.style.setProperty("--note-w", noteWidth ? noteWidth + "px" : "");
       collage.innerHTML = "";
       state.votes.forEach((v, i) => {
         const c = byId[v.commitmentId];
@@ -1009,14 +1099,91 @@
         note.textContent = c ? c.label : "Pledge";
         collage.appendChild(note);
       });
-      countEl.textContent = state.votes.length;
-      emptyWall.style.display = state.votes.length === 0 ? "block" : "none";
+    }
+
+    function renderCategorySummary(state, byId) {
+      const counts = Object.fromEntries(state.commitments.map((c) => [c.id, 0]));
+      state.votes.forEach((v) => { if (counts[v.commitmentId] !== undefined) counts[v.commitmentId]++; });
+
+      categorySummary.innerHTML = "";
+      state.commitments.forEach((c) => {
+        const count = counts[c.id] || 0;
+        const card = document.createElement("div");
+        card.className = "category-card";
+
+        const head = document.createElement("div");
+        head.className = "category-head";
+        const swatch = document.createElement("span");
+        swatch.className = "category-swatch";
+        swatch.style.background = c.color;
+        const label = document.createElement("span");
+        label.className = "category-label";
+        label.textContent = c.label;
+        const num = document.createElement("span");
+        num.className = "category-count mono";
+        num.textContent = count;
+        head.append(swatch, label, num);
+
+        const dots = document.createElement("div");
+        dots.className = "category-dots";
+        const perDot = count > DOT_CAP ? Math.ceil(count / DOT_CAP) : 1;
+        const dotCount = perDot > 1 ? Math.ceil(count / perDot) : count;
+        for (let i = 0; i < dotCount; i++) {
+          const dot = document.createElement("span");
+          dot.className = "category-dot";
+          dot.style.background = c.color;
+          dots.appendChild(dot);
+        }
+
+        card.append(head, dots);
+        if (perDot > 1) {
+          const legend = document.createElement("div");
+          legend.className = "category-legend";
+          legend.textContent = `● = ${perDot} pledges`;
+          card.appendChild(legend);
+        }
+        categorySummary.appendChild(card);
+      });
+    }
+
+    function render(state) {
+      const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
+      const count = state.votes.length;
+      let useSummary = false;
+
+      if (count > 0) {
+        const naturalWidth = wallScale() * 6;
+        const gap = wallScale() * 0.64;
+        const containerWidth = collage.clientWidth || window.innerWidth - wallScale() * 3.2;
+        const top = collage.getBoundingClientRect().top;
+        const bottomPad = parseFloat(getComputedStyle(displayEl).paddingBottom) || 0;
+        const containerHeight = Math.max(100, window.innerHeight - top - bottomPad);
+
+        const fitWidth = computeFitWidth(count, containerWidth, containerHeight, gap, NOTE_ASPECT);
+        useSummary = !fitWidth || fitWidth < NOTE_MIN_WIDTH;
+
+        if (!useSummary) {
+          renderNotes(state, byId, Math.min(naturalWidth, fitWidth));
+        }
+      }
+
+      if (useSummary || count === 0) {
+        collage.style.display = "none";
+        categorySummary.style.display = count === 0 ? "none" : "";
+        if (count > 0) renderCategorySummary(state, byId);
+      } else {
+        collage.style.display = "";
+        categorySummary.style.display = "none";
+      }
+
+      countEl.textContent = count;
+      emptyWall.style.display = count === 0 ? "block" : "none";
 
       if (state.settings.goalEnabled && state.settings.goalTarget > 0) {
         goalBar.hidden = false;
-        const pct = Math.min(100, Math.round((state.votes.length / state.settings.goalTarget) * 100));
+        const pct = Math.min(100, Math.round((count / state.settings.goalTarget) * 100));
         goalBarFill.style.width = pct + "%";
-        goalBarLabel.textContent = `${state.votes.length} / ${state.settings.goalTarget} pledges`;
+        goalBarLabel.textContent = `${count} / ${state.settings.goalTarget} pledges`;
       } else {
         goalBar.hidden = true;
       }
