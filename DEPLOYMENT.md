@@ -16,6 +16,19 @@ Target domain: `courage.tomhawkins.me`
   wrangler login
   ```
 
+## Automated deploys (GitHub Actions)
+
+`.github/workflows/deploy.yml` deploys both the Worker and the frontend on every push to `claude/courage-wall-setup-lowwhf` (or on a manual "Run workflow"). It needs two repository secrets:
+
+- `CLOUDFLARE_API_TOKEN` — an API token with `Workers Scripts:Edit`, `Workers KV Storage:Edit`, and `Cloudflare Pages:Edit` permissions for your account.
+- `CLOUDFLARE_ACCOUNT_ID` — found in the Cloudflare dashboard sidebar, or via `wrangler whoami`.
+
+Add both under the repo's **Settings → Secrets and variables → Actions**. Once set, pushing to that branch runs `wrangler deploy` for the Worker, then builds `dist/index.html` (the production HTML with a `<script>` tag pointing at the Worker's freshly-deployed `*.workers.dev` URL) and runs `wrangler pages deploy dist --project-name=courage-wall`.
+
+The workflow only needs updating if the Worker gets routed onto the same custom domain as the Pages site (see step 2 below) — at that point the URL-injection step becomes unnecessary and can be dropped, since relative `/api/...` calls will work instead.
+
+The steps below are for deploying manually instead (or for the one-time custom-domain setup in step 5, which isn't automatable).
+
 ## 1. Create the KV namespace
 
 ```bash
