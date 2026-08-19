@@ -187,7 +187,7 @@ function sanitizeCommitments(list) {
   if (!Array.isArray(list)) return null;
   const clean = list
     .filter((c) => c && typeof c.id === "string" && c.id.length > 0 && typeof c.label === "string" && HEX_COLOR.test(c.color))
-    .map((c) => ({ id: c.id.slice(0, 40), label: c.label.trim().slice(0, 60) || "Untitled", color: c.color }));
+    .map((c) => ({ id: c.id.slice(0, 40), label: c.label.trim().slice(0, 60), color: c.color }));
   return clean.length > 0 ? clean : null;
 }
 
