@@ -15,7 +15,10 @@
  *
  * Endpoints:
  *   GET    /api/state                                   -> { votes, commitments, settings, background, pledgeBackground }
- *                                                            (combined read, meant for polling)
+ *                                                            (combined read, meant for polling; edge-cached ~2s)
+ *   GET    /api/pledge-state                            -> { commitments, settings, pledgeBackground }
+ *                                                            (lighter read for the pledge view, which never
+ *                                                            needs the vote list; also edge-cached ~2s)
  *
  *   POST   /api/vote        { commitmentId } or { text }   -> add a pledge (public) — a preset
  *                                                            pick or a custom pledge (randomly
@@ -127,17 +130,37 @@ async function putJSON(env, key, value) {
   await env.VOTES_KV.put(key, JSON.stringify(value));
 }
 
+// Votes are also stored as KV list metadata (see putVote) so listAllVotes
+// can read every vote's data straight out of one list() call instead of a
+// separate get() per vote — that per-vote get() was the single biggest
+// source of KV read volume (N extra reads on every poll, scaling with the
+// number of pledges). The value itself is kept too, both as a fallback for
+// votes written before this change (no metadata yet) and so single-vote
+// lookups (PATCH/DELETE by id) stay simple.
+async function putVote(env, id, vote) {
+  await env.VOTES_KV.put(VOTE_PREFIX + id, JSON.stringify(vote), { metadata: vote });
+}
+
 // Reads every vote:* key (paginating past KV's 1000-keys-per-list-call
-// limit if there are that many), fetching values in parallel. list()
-// returns keys in lexicographic order, not creation order, so the
-// result is explicitly sorted by timestamp afterward.
+// limit if there are that many). list() returns keys in lexicographic
+// order, not creation order, so the result is explicitly sorted by
+// timestamp afterward.
 async function listAllVotes(env) {
   const votes = [];
   let cursor;
   do {
     const page = await env.VOTES_KV.list({ prefix: VOTE_PREFIX, cursor, limit: 1000 });
-    const values = await Promise.all(page.keys.map((k) => env.VOTES_KV.get(k.name)));
-    for (const raw of values) {
+    // Keys written before metadata was introduced fall back to a get().
+    const needsGet = page.keys.filter((k) => !k.metadata);
+    const fetched = new Map(
+      await Promise.all(needsGet.map(async (k) => [k.name, await env.VOTES_KV.get(k.name)]))
+    );
+    for (const k of page.keys) {
+      if (k.metadata) {
+        votes.push(k.metadata);
+        continue;
+      }
+      const raw = fetched.get(k.name);
       if (!raw) continue;
       try {
         votes.push(JSON.parse(raw));
@@ -216,8 +239,28 @@ function randomPledgeColor() {
   return RANDOM_PLEDGE_COLORS[Math.floor(Math.random() * RANDOM_PLEDGE_COLORS.length)];
 }
 
+// Wraps a GET response in Cloudflare's edge Cache API for a few seconds, so
+// several devices polling within the same window (many phones on the
+// pledge view, plus the display and admin panel) share one KV round-trip
+// instead of each triggering their own. Safe for these endpoints since
+// they're unauthenticated GETs with no per-client variance, and a couple
+// seconds of extra staleness is negligible next to KV's own eventual
+// consistency (already up to ~60s — see DEPLOYMENT.md).
+async function cachedJson(request, ctx, ttlSeconds, compute) {
+  const cache = caches.default;
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  const data = await compute();
+  const response = new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { "Content-Type": "application/json", "Cache-Control": `public, max-age=${ttlSeconds}`, ...CORS_HEADERS },
+  });
+  ctx.waitUntil(cache.put(request, response.clone()));
+  return response;
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const { pathname } = url;
     const method = request.method;
@@ -228,14 +271,32 @@ export default {
 
     // ---- combined read, used by the display/admin polling loop ----
     if (pathname === "/api/state" && method === "GET") {
-      const [votes, commitments, settings, background, pledgeBackground] = await Promise.all([
-        listAllVotes(env),
-        getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS),
-        getJSON(env, KEYS.settings, DEFAULT_SETTINGS),
-        getJSON(env, KEYS.background, null),
-        getJSON(env, KEYS.pledgeBackground, null),
-      ]);
-      return json({ votes, commitments, settings, background, pledgeBackground });
+      return cachedJson(request, ctx, 2, async () => {
+        const [votes, commitments, settings, background, pledgeBackground] = await Promise.all([
+          listAllVotes(env),
+          getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS),
+          getJSON(env, KEYS.settings, DEFAULT_SETTINGS),
+          getJSON(env, KEYS.background, null),
+          getJSON(env, KEYS.pledgeBackground, null),
+        ]);
+        return { votes, commitments, settings, background, pledgeBackground };
+      });
+    }
+
+    // ---- lightweight read for the pledge view, which never needs the
+    // vote list (only commitments/settings/pledgeBackground) — splitting
+    // this out keeps the single most-opened screen at any event (every
+    // attendee's own phone) from paying the cost of reading every vote on
+    // every poll. ----
+    if (pathname === "/api/pledge-state" && method === "GET") {
+      return cachedJson(request, ctx, 2, async () => {
+        const [commitments, settings, pledgeBackground] = await Promise.all([
+          getJSON(env, KEYS.commitments, DEFAULT_COMMITMENTS),
+          getJSON(env, KEYS.settings, DEFAULT_SETTINGS),
+          getJSON(env, KEYS.pledgeBackground, null),
+        ]);
+        return { commitments, settings, pledgeBackground };
+      });
     }
 
     // ---- votes ----
@@ -252,7 +313,7 @@ export default {
       if (typeof body?.text === "string") {
         const text = sanitizePledgeText(body.text);
         if (!text) return json({ error: "Invalid pledge text" }, 400);
-        await putJSON(env, VOTE_PREFIX + id, { id, text, color: randomPledgeColor(), timestamp: Date.now() });
+        await putVote(env, id, { id, text, color: randomPledgeColor(), timestamp: Date.now() });
         return json({ success: true });
       }
 
@@ -261,7 +322,7 @@ export default {
         return json({ error: "Invalid commitmentId" }, 400);
       }
       // Its own key — never contends with any other vote's write.
-      await putJSON(env, VOTE_PREFIX + id, { id, commitmentId: body.commitmentId, timestamp: Date.now() });
+      await putVote(env, id, { id, commitmentId: body.commitmentId, timestamp: Date.now() });
       return json({ success: true });
     }
 
@@ -297,7 +358,7 @@ export default {
       if (typeof body?.text === "string") {
         const text = sanitizePledgeText(body.text);
         if (!text) return json({ error: "Invalid pledge text" }, 400);
-        await putJSON(env, key, { id: target.id, text, color: target.color || randomPledgeColor(), timestamp: target.timestamp });
+        await putVote(env, voteId, { id: target.id, text, color: target.color || randomPledgeColor(), timestamp: target.timestamp });
         return json({ success: true });
       }
 
@@ -305,7 +366,7 @@ export default {
       if (!commitments.some((c) => c.id === body?.commitmentId)) {
         return json({ error: "Invalid commitmentId" }, 400);
       }
-      await putJSON(env, key, { id: target.id, commitmentId: body.commitmentId, timestamp: target.timestamp });
+      await putVote(env, voteId, { id: target.id, commitmentId: body.commitmentId, timestamp: target.timestamp });
       return json({ success: true });
     }
 
