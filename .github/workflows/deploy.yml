@@ -39,6 +39,16 @@ jobs:
             cat courage-wall-production.html
           } > dist/index.html
 
+      # No-op once the project already exists; wrangler errors on a repeat
+      # `pages project create`, so this step is allowed to fail harmlessly.
+      - name: Ensure Pages project exists
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages project create courage-wall --production-branch=claude/courage-wall-setup-lowwhf
+
       - name: Deploy Pages
         uses: cloudflare/wrangler-action@v3
         with:
