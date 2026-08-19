@@ -297,13 +297,19 @@
     justify-content: center;
     text-align: center;
     word-break: break-word;
+  }
+  /* Applied only to a note's first render (see renderNotes) — every
+     pledge already on the wall keeps its DOM node across re-renders
+     instead of being torn down and recreated, so adding one new pledge
+     doesn't replay this animation for the whole board. */
+  .sticky-note.note-enter {
     animation: drop-in 0.35s ease both;
   }
   @keyframes drop-in {
     from { opacity: 0; transform: translateY(-8px) rotate(0deg); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .sticky-note { animation: none; }
+    .sticky-note.note-enter { animation: none; }
   }
 
   /* Fallback for when there are too many pledges for individual notes to
@@ -391,6 +397,48 @@
     line-height: 1.3;
   }
   .display-qr .qr-copy strong { display: block; color: #F0B65C; font-size: calc(var(--wall-scale) * 0.56); }
+
+  /* ============ PRINT / PDF EXPORT VIEW ============ */
+  /* A standalone snapshot of the board for "Export board as PDF" — unlike
+     the live display, it isn't clipped to one screen or resized to fit;
+     notes are a fixed comfortable size and just wrap across as many
+     pages as needed, since browser print/Save-as-PDF paginates for us. */
+  #print-view.active {
+    display: block;
+    min-height: 100vh;
+    background: #170F1F;
+    color: #F3EEFA;
+    padding: 40px;
+  }
+  .print-header { margin-bottom: 26px; }
+  .print-eyebrow {
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  .print-header h1 {
+    color: var(--wall-accent, #E4D2F7);
+    margin: 0 0 6px;
+    font-size: 2rem;
+  }
+  .print-meta { color: #C9B9DE; margin: 0; font-size: 0.95rem; }
+  .print-collage {
+    --note-w: 170px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .print-collage .sticky-note { animation: none; }
+  @media print {
+    .nav-links { display: none !important; }
+    #print-view.active {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
 
   /* ============ ADMIN VIEW ============ */
   #admin-view.active {
@@ -791,6 +839,16 @@
   </div>
 </div>
 
+<!-- ===================== PRINT / PDF EXPORT VIEW ===================== -->
+<div id="print-view" class="view">
+  <div class="print-header">
+    <p class="print-eyebrow" id="print-eyebrow"></p>
+    <h1 id="print-title"></h1>
+    <p class="print-meta" id="print-meta"></p>
+  </div>
+  <div class="print-collage" id="print-collage"></div>
+</div>
+
 <!-- ===================== ADMIN VIEW ===================== -->
 <div id="admin-view" class="view">
   <h1 class="display-font">Admin</h1>
@@ -858,6 +916,7 @@
     <p class="section-label">Actions</p>
     <div class="admin-actions">
       <button class="secondary-btn" id="demo-votes-btn">Add 10 demo pledges</button>
+      <button class="secondary-btn" id="export-pdf-btn">Export board as PDF</button>
       <button class="danger-btn" id="reset-votes-btn">Reset all pledges</button>
     </div>
 
@@ -978,6 +1037,17 @@
     const b = parseInt(clean.slice(4, 6), 16);
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return luminance > 0.6 ? "#241B2F" : "#ffffff";
+  }
+
+  // A pledge is either a preset pick (look up its commitment's label and
+  // color) or a custom one (already carries its own text/color). Shared
+  // by the display view and the print/export view.
+  function pledgeVisual(v, byId) {
+    if (v.commitmentId) {
+      const c = byId[v.commitmentId];
+      return { label: c ? c.label : "Pledge", color: c ? c.color : "#9ca3af" };
+    }
+    return { label: v.text || "Pledge", color: v.color || "#9ca3af" };
   }
 
   function escapeHtml(str) {
@@ -1122,7 +1192,7 @@
 
   const params = new URLSearchParams(window.location.search);
   const view = params.get("view") || "pledge";
-  ["pledge", "display", "admin"].forEach((v) => {
+  ["pledge", "display", "admin", "print"].forEach((v) => {
     document.getElementById(v + "-view").classList.toggle("active", v === view);
   });
 
@@ -1220,6 +1290,12 @@
     const goalBarFill = document.getElementById("goal-bar-fill");
     const goalBarLabel = document.getElementById("goal-bar-label");
     let qrRendered = false;
+    // Persists note DOM nodes across renders, keyed by pledge id, so a
+    // new pledge only appends one new node instead of the whole board
+    // being torn down and recreated (which used to replay every note's
+    // entrance animation on every single change). Cleared whenever the
+    // collage is wiped for a mode switch (see render()).
+    const renderedNotes = new Map();
 
     const NOTE_ASPECT = 6 / 3.8;
     // Below this width a note's label stops being legibly readable at a
@@ -1231,29 +1307,34 @@
     // dot cluster itself doesn't also become unreadable.
     const DOT_CAP = 140;
 
-    // A pledge is either a preset pick (look up its commitment's label
-    // and color) or a custom one (already carries its own text/color).
-    function pledgeVisual(v, byId) {
-      if (v.commitmentId) {
-        const c = byId[v.commitmentId];
-        return { label: c ? c.label : "Pledge", color: c ? c.color : "#9ca3af" };
-      }
-      return { label: v.text || "Pledge", color: v.color || "#9ca3af" };
-    }
-
     function renderNotes(state, byId, noteWidth) {
       collage.style.setProperty("--note-w", noteWidth ? noteWidth + "px" : "");
-      collage.innerHTML = "";
+      const seen = new Set();
       state.votes.forEach((v, i) => {
+        seen.add(v.id);
         const { label, color } = pledgeVisual(v, byId);
-        const note = document.createElement("div");
-        note.className = "sticky-note";
+        let note = renderedNotes.get(v.id);
+        if (!note) {
+          note = document.createElement("div");
+          note.className = "sticky-note note-enter";
+          note.style.transform = `rotate(${seededRotation(i)}deg)`;
+          renderedNotes.set(v.id, note);
+          collage.appendChild(note);
+        }
+        // Always refresh content/color — an existing pledge can still be
+        // reassigned or recolored by the admin — but never touch the
+        // node's animation class once it's been placed on the wall.
         note.style.background = color;
         note.style.color = textColorFor(color);
-        note.style.transform = `rotate(${seededRotation(i)}deg)`;
         note.textContent = label;
-        collage.appendChild(note);
       });
+      // Drop nodes for pledges that were deleted or reassigned away.
+      for (const [id, note] of renderedNotes) {
+        if (!seen.has(id)) {
+          note.remove();
+          renderedNotes.delete(id);
+        }
+      }
     }
 
     function appendCategoryCard(label, swatchColor, count, dotColors) {
@@ -1366,6 +1447,7 @@
         // Left empty (not display:none) so its position/height stays
         // real for next render's measurement instead of collapsing.
         collage.innerHTML = "";
+        renderedNotes.clear();
         collage.style.removeProperty("--note-w");
         categorySummary.style.display = count === 0 ? "none" : "";
         if (count > 0) renderCategorySummary(state);
@@ -1389,6 +1471,53 @@
     pollState(1000, render);
   }
 
+  // ---------- Print / PDF export view ----------
+  // A one-shot snapshot (not polled/live) opened from the admin panel's
+  // "Export board as PDF" button, meant to be saved via the browser's
+  // print dialog at the end of an event. Always renders individual
+  // notes — never the category-summary fallback — since a printed
+  // multi-page document doesn't have the display's one-screen constraint
+  // that fallback exists for.
+  if (view === "print") {
+    (async () => {
+      let state;
+      try {
+        state = await apiGet("/api/state");
+      } catch (err) {
+        document.getElementById("print-title").textContent = "Couldn't load the board";
+        document.getElementById("print-meta").textContent = "Try again once you're back online.";
+        return;
+      }
+
+      const byId = Object.fromEntries(state.commitments.map((c) => [c.id, c]));
+      document.getElementById("print-eyebrow").textContent = state.settings.eyebrow;
+      document.getElementById("print-title").textContent = state.settings.title;
+      const dateStr = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+      const count = state.votes.length;
+      document.getElementById("print-meta").textContent =
+        `${count} pledge${count === 1 ? "" : "s"} · Printed ${dateStr}`;
+
+      const collage = document.getElementById("print-collage");
+      state.votes.forEach((v, i) => {
+        const { label, color } = pledgeVisual(v, byId);
+        const note = document.createElement("div");
+        note.className = "sticky-note";
+        note.style.background = color;
+        note.style.color = textColorFor(color);
+        note.style.transform = `rotate(${seededRotation(i)}deg)`;
+        note.textContent = label;
+        collage.appendChild(note);
+      });
+
+      applyBranding(state.settings);
+      document.title = `${state.settings.title} — pledge board`;
+
+      // Let layout/fonts settle before handing off to the print dialog.
+      const fontsReady = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+      fontsReady.then(() => setTimeout(() => window.print(), 250));
+    })();
+  }
+
   // ---------- Admin view ----------
   if (view === "admin") {
     const pinGate = document.getElementById("pin-gate");
@@ -1402,6 +1531,7 @@
     const optionList = document.getElementById("option-list");
     const optionResetBtn = document.getElementById("option-reset-btn");
     const demoVotesBtn = document.getElementById("demo-votes-btn");
+    const exportPdfBtn = document.getElementById("export-pdf-btn");
     const resetVotesBtn = document.getElementById("reset-votes-btn");
     const copyLinkBtn = document.getElementById("copy-link-btn");
     const copyNote = document.getElementById("copy-note");
@@ -1781,6 +1911,11 @@
       }
       await refreshNow();
       demoVotesBtn.disabled = false;
+    });
+
+    exportPdfBtn.addEventListener("click", () => {
+      const url = window.location.origin + window.location.pathname + "?view=print";
+      window.open(url, "_blank");
     });
 
     resetVotesBtn.addEventListener("click", async () => {
