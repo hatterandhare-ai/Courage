@@ -1,0 +1,47 @@
+name: Deploy Courage Wall
+
+on:
+  push:
+    branches: [claude/courage-wall-setup-lowwhf]
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy Worker
+        id: worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      # Points the static frontend at the Worker's *.workers.dev URL by reading
+      # it straight out of the deploy step's own output, so nothing needs to be
+      # hardcoded here. Skip this (and the script tag) once the Worker is
+      # routed onto the same custom domain as the Pages site — see DEPLOYMENT.md.
+      - name: Build frontend
+        run: |
+          mkdir -p dist
+          WORKER_URL=$(echo "${{ steps.worker.outputs.command-output }}" | grep -oE 'https://[a-zA-Z0-9.-]+\.workers\.dev' | head -1)
+          if [ -z "$WORKER_URL" ]; then
+            echo "::error::Could not find the deployed Worker URL in wrangler's output; check the 'Deploy Worker' step logs."
+            exit 1
+          fi
+          echo "Worker deployed at $WORKER_URL"
+          {
+            echo "<script>window.COURAGE_WALL_API_BASE = \"$WORKER_URL\";</script>"
+            cat courage-wall-production.html
+          } > dist/index.html
+
+      - name: Deploy Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=courage-wall
