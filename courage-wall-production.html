@@ -1207,12 +1207,12 @@
   }
 
   // Polls the combined state endpoint on an interval; returns a stop fn.
-  function pollState(intervalMs, onUpdate) {
+  function pollState(intervalMs, onUpdate, endpoint = "/api/state") {
     let stopped = false;
     async function tick() {
       if (stopped) return;
       try {
-        const state = await apiGet("/api/state");
+        const state = await apiGet(endpoint);
         onUpdate(state);
       } catch (err) {
         // transient network error — retry on next tick
@@ -1299,6 +1299,9 @@
       }
     });
 
+    // Never needs the vote list, so it polls the lighter endpoint —
+    // this is the screen open on every attendee's own phone, so it's
+    // the single biggest source of poll volume at an event.
     pollState(4000, (state) => {
       commitments = state.commitments;
       mode = state.settings.pledgeMode === "custom" ? "custom" : "preset";
@@ -1309,7 +1312,7 @@
       if (mode === "preset") renderButtons();
       applyBranding(state.settings);
       applyPledgeBackground(state.pledgeBackground);
-    });
+    }, "/api/pledge-state");
   }
 
   // ---------- Display view ----------
@@ -1501,7 +1504,9 @@
       }
     }
 
-    pollState(1000, render);
+    // 2s rather than 1s — the ~2s edge cache on /api/state means anything
+    // faster wouldn't see fresher data anyway, just repeat the same read.
+    pollState(2000, render);
   }
 
   // ---------- Print / PDF export view ----------
