@@ -1710,34 +1710,53 @@
       pledgeListEmpty.style.display = sorted.length === 0 ? "block" : "none";
     }
 
+    function buildOptionRow(c, i) {
+      const row = document.createElement("div");
+      row.className = "option-row";
+
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.className = "option-color";
+      colorInput.value = c.color;
+      colorInput.setAttribute("aria-label", `Color for ${c.label || "commitment " + (i + 1)}`);
+      colorInput.addEventListener("change", () => commitOption(c.id, { color: colorInput.value }));
+
+      const labelInput = document.createElement("input");
+      labelInput.type = "text";
+      labelInput.className = "option-label";
+      labelInput.value = c.label;
+      labelInput.maxLength = 40;
+      labelInput.placeholder = COMMITMENT_LABEL_HINTS[i] || "Commitment text";
+      labelInput.setAttribute("aria-label", "Option text");
+      labelInput.addEventListener("change", () => {
+        const value = labelInput.value.trim();
+        if (!value) { labelInput.value = c.label; return; }
+        commitOption(c.id, { label: value });
+      });
+
+      row.append(colorInput, labelInput);
+      return row;
+    }
+
+    // Reconciles in place (rather than wiping and rebuilding every row) so that
+    // committing one option — e.g. tabbing out of its label, or changing its
+    // color — doesn't destroy the DOM node the user just tabbed/clicked into
+    // on another row, which would otherwise steal focus mid-edit.
     function renderOptionEditor(state) {
-      optionList.innerHTML = "";
-      state.commitments.forEach((c, i) => {
-        const row = document.createElement("div");
-        row.className = "option-row";
-
-        const colorInput = document.createElement("input");
-        colorInput.type = "color";
-        colorInput.className = "option-color";
-        colorInput.value = c.color;
+      const commitments = state.commitments;
+      const rows = optionList.children;
+      if (rows.length !== commitments.length) {
+        optionList.innerHTML = "";
+        commitments.forEach((c, i) => optionList.appendChild(buildOptionRow(c, i)));
+        return;
+      }
+      commitments.forEach((c, i) => {
+        const row = rows[i];
+        const colorInput = row.querySelector(".option-color");
+        const labelInput = row.querySelector(".option-label");
+        if (document.activeElement !== colorInput) colorInput.value = c.color;
         colorInput.setAttribute("aria-label", `Color for ${c.label || "commitment " + (i + 1)}`);
-        colorInput.addEventListener("change", () => commitOption(c.id, { color: colorInput.value }));
-
-        const labelInput = document.createElement("input");
-        labelInput.type = "text";
-        labelInput.className = "option-label";
-        labelInput.value = c.label;
-        labelInput.maxLength = 40;
-        labelInput.placeholder = COMMITMENT_LABEL_HINTS[i] || "Commitment text";
-        labelInput.setAttribute("aria-label", "Option text");
-        labelInput.addEventListener("change", () => {
-          const value = labelInput.value.trim();
-          if (!value) { labelInput.value = c.label; return; }
-          commitOption(c.id, { label: value });
-        });
-
-        row.append(colorInput, labelInput);
-        optionList.appendChild(row);
+        if (document.activeElement !== labelInput) labelInput.value = c.label;
       });
     }
 
