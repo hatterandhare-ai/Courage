@@ -46,10 +46,18 @@ If you do this, the frontend can leave `API_BASE_URL` empty (relative `/api/...`
 
 ### Optional: change the admin PIN
 
-Edit `ADMIN_PIN` under `[vars]` in `wrangler.toml`, and update the matching `ADMIN_PIN` constant in `courage-wall-production.html`. Redeploy the Worker after changing it. For anything beyond a casual event PIN, set it as a Wrangler secret instead of a plaintext var:
+The easiest way is from the app itself: **Admin → Admin access → Update PIN**. That writes the new PIN to KV, where it takes precedence over `ADMIN_PIN` from then on — no redeploy needed.
+
+`ADMIN_PIN` under `[vars]` in `wrangler.toml` (or a Wrangler secret) only sets the *bootstrap* PIN used before an admin ever sets one in KV:
 
 ```bash
 wrangler secret put ADMIN_PIN
+```
+
+**Forgot the PIN you set in-app?** Delete the `pin` key from the KV namespace to fall back to `ADMIN_PIN` again:
+
+```bash
+wrangler kv key delete --namespace-id=<your-namespace-id> pin
 ```
 
 ## 3. Point the frontend at the Worker
@@ -85,14 +93,16 @@ In the Cloudflare Pages project → **Custom domains**, add `courage.tomhawkins.
 - Visit `https://courage.tomhawkins.me/?view=admin`, enter the PIN, and confirm stats, the pledge list (edit/remove), the pledge options editor, the pledge mode toggle, campaign branding fields, the goal toggle, the two background uploads (display and pledge screen), the QR code, and reset all work.
 - Toggle **Pledge mode** to "Let people write their own" and confirm the pledge view swaps to a free-text box, submissions get a random color, and the display/admin views render them correctly (including falling back to a single aggregated "Custom pledges" card, instead of six empty preset cards, once there are enough pledges to need the summary view).
 - Click **Export board as PDF** in the admin panel and confirm it opens `?view=print` in a new tab, renders every pledge as a sticky note (not clipped to one screen, not the category-summary fallback), and triggers the browser's print dialog — "Save as PDF" there is the actual export. Adding a pledge on the live display should only animate the new note in, not replay the drop-in animation for the whole board.
+- Everything starts blank: the campaign fields (eyebrow/title/tagline) and all six pledge option labels are empty until an admin fills them in — confirm the pledge/display views hold up with blank text (they will, since nothing renders a hardcoded fallback) and that the option editor still shows helpful greyed-out example placeholder text per field.
+- In **Admin → Admin access**, set a new PIN, then reload `?view=admin` in a fresh tab and confirm the *old* PIN no longer unlocks it and the *new* one does.
 
 ## API surface
 
-Beyond the original vote/reset endpoints, the Worker now also serves the pledge options, campaign branding, goal setting, and display background — see the comment block at the top of `worker.js` for the full list. `GET /api/state` returns all of it in one call and is what the display and admin views poll; individual `GET`/`PUT`/`PATCH`/`DELETE` endpoints exist per resource for the admin panel's actions. Everything except `POST /api/vote` and the `GET` endpoints requires the PIN in the request body.
+Beyond the original vote/reset endpoints, the Worker now also serves the pledge options, campaign branding, goal setting, display background, and the admin PIN itself — see the comment block at the top of `worker.js` for the full list. `GET /api/state` returns most of it in one call and is what the display and admin views poll; individual `GET`/`PUT`/`PATCH`/`DELETE` endpoints exist per resource for the admin panel's actions. Everything except `POST /api/vote`, `POST /api/verify-pin`, and the `GET` endpoints requires the PIN in the request body. `POST /api/verify-pin` exists solely to gate the admin unlock screen now that the PIN can change at runtime — it never mutates anything and isn't part of `GET /api/state` (the current PIN itself is never returned by any endpoint, only checked).
 
 ## Known limitations
 
 - Pledge options, campaign settings, and the background image are each stored as one JSON value under one KV key apiece — read-modify-write, not atomic. Fine here, since only the (single) admin ever writes them; there's no realistic concurrent-write scenario. Votes don't have this problem: each pledge gets its own KV key specifically so simultaneous submissions from many people never contend with each other (confirmed by testing concurrent writes locally, both before and after that change — see the commit that introduced it).
 - Cloudflare KV is eventually consistent — a write can take a little while (typically seconds, occasionally up to ~60s) to propagate to every edge location. For a single in-person event this is rarely noticeable, but don't expect instant global consistency.
 - The background image is stored as a data URL directly in KV (capped at 5MB server-side; the admin panel downscales uploads client-side to stay well under that). For very large images or many campaigns' worth of assets, consider moving this to R2 instead.
-- The admin PIN is a shared constant, not a per-user credential. It gates every mutating endpoint on the backend, but only lightly gates the frontend admin view. Don't reuse it for anything sensitive.
+- The admin PIN is a single shared secret, not a per-user credential — everyone with it has full admin access, and there's no audit trail of who changed what. It gates every mutating endpoint on the backend. Don't reuse it for anything sensitive.

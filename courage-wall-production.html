@@ -793,9 +793,9 @@
 <!-- ===================== PLEDGE VIEW ===================== -->
 <div id="pledge-view" class="view">
   <div class="pledge-card">
-    <p class="eyebrow" id="pledge-eyebrow">Wear It Purple Day</p>
-    <h1 id="pledge-title">Courage Wall</h1>
-    <p id="pledge-tagline">Pick one commitment you're making today. It'll land on the wall right away.</p>
+    <p class="eyebrow" id="pledge-eyebrow"></p>
+    <h1 id="pledge-title"></h1>
+    <p id="pledge-tagline"></p>
 
     <div class="commitment-list" id="commitment-list"></div>
 
@@ -820,7 +820,7 @@
 <!-- ===================== DISPLAY VIEW ===================== -->
 <div id="display-view" class="view">
   <div class="wall-header">
-    <h1 class="display-font" id="wall-title">Courage Wall</h1>
+    <h1 class="display-font" id="wall-title"></h1>
     <div class="wall-count"><span class="num mono" id="display-count">0</span> pledges made</div>
   </div>
 
@@ -864,13 +864,13 @@
     <p class="section-label">Campaign</p>
     <div class="campaign-card">
       <label class="field-label" for="settings-eyebrow">Eyebrow</label>
-      <input type="text" id="settings-eyebrow" class="field-input" maxlength="40" />
+      <input type="text" id="settings-eyebrow" class="field-input" maxlength="40" placeholder="e.g. Wear It Purple Day" />
 
       <label class="field-label" for="settings-title">Title</label>
-      <input type="text" id="settings-title" class="field-input" maxlength="40" />
+      <input type="text" id="settings-title" class="field-input" maxlength="40" placeholder="e.g. Courage Wall" />
 
       <label class="field-label" for="settings-tagline">Tagline</label>
-      <input type="text" id="settings-tagline" class="field-input" maxlength="140" />
+      <input type="text" id="settings-tagline" class="field-input" maxlength="140" placeholder="e.g. Pick one commitment you're making today." />
 
       <label class="field-label" for="settings-accent">Accent color</label>
       <input type="color" id="settings-accent" class="option-color" />
@@ -882,6 +882,14 @@
         </label>
         <input type="number" id="settings-goal-target" class="field-input goal-target-input" min="1" step="1" />
       </div>
+    </div>
+
+    <p class="section-label">Admin access</p>
+    <div class="campaign-card">
+      <label class="field-label" for="settings-pin">New admin PIN</label>
+      <input type="text" id="settings-pin" class="field-input" maxlength="8" inputmode="numeric" autocomplete="off" placeholder="4–8 digits" />
+      <button class="secondary-btn" id="pin-save-btn" style="margin-top:10px;width:fit-content;">Update PIN</button>
+      <div class="copy-note" id="pin-note"></div>
     </div>
 
     <p class="section-label">Pledge mode</p>
@@ -966,16 +974,24 @@
 
 <script>
 (function () {
-  const ADMIN_PIN = "1234";
   const API_BASE_URL = window.COURAGE_WALL_API_BASE || "";
 
+  // Labels start blank — colors are the app's own visual defaults, but
+  // the text is campaign-specific and left for the admin to fill in.
   const DEFAULT_COMMITMENTS = [
-    { id: "learn", label: "Learn more", color: "#7c3aed" },
-    { id: "training", label: "Attend training", color: "#3b82f6" },
-    { id: "challenge", label: "Challenge assumptions", color: "#10b981" },
-    { id: "speak", label: "Speak up", color: "#f59e0b" },
-    { id: "support", label: "Support colleague", color: "#f97316" },
-    { id: "share", label: "Share story", color: "#ef4444" },
+    { id: "learn", label: "", color: "#7c3aed" },
+    { id: "training", label: "", color: "#3b82f6" },
+    { id: "challenge", label: "", color: "#10b981" },
+    { id: "speak", label: "", color: "#f59e0b" },
+    { id: "support", label: "", color: "#f97316" },
+    { id: "share", label: "", color: "#ef4444" },
+  ];
+  // Shown only as placeholder hint text in the option editor — never
+  // saved anywhere — so a blank slate still shows an admin what kind of
+  // text belongs in each slot.
+  const COMMITMENT_LABEL_HINTS = [
+    "e.g. Learn more", "e.g. Attend training", "e.g. Challenge assumptions",
+    "e.g. Speak up", "e.g. Support colleague", "e.g. Share story",
   ];
 
   function apiUrl(path) {
@@ -1554,6 +1570,9 @@
     const modePresetInput = document.getElementById("mode-preset");
     const modeCustomInput = document.getElementById("mode-custom");
     const optionsSection = document.getElementById("options-section");
+    const pinInputNew = document.getElementById("settings-pin");
+    const pinSaveBtn = document.getElementById("pin-save-btn");
+    const pinNote = document.getElementById("pin-note");
 
     let pin = "";
     let latestState = null;
@@ -1595,10 +1614,11 @@
       // Consistent with hiding the pledge-options editor in custom mode:
       // don't clutter the stats with six always-zero preset cards either.
       if (state.settings.pledgeMode !== "custom") {
-        state.commitments.forEach((c) => {
+        state.commitments.forEach((c, i) => {
           const card = document.createElement("div");
           card.className = "stat-card";
-          card.innerHTML = `<div class="label">${escapeHtml(c.label)}</div><div class="value mono">${counts[c.id] || 0}</div>`;
+          const label = c.label ? escapeHtml(c.label) : `<em>Commitment ${i + 1} (untitled)</em>`;
+          card.innerHTML = `<div class="label">${label}</div><div class="value mono">${counts[c.id] || 0}</div>`;
           statsGrid.appendChild(card);
         });
       }
@@ -1629,10 +1649,10 @@
           editor = document.createElement("select");
           editor.className = "pledge-select";
           editor.setAttribute("aria-label", "Reassign this pledge to a different option");
-          state.commitments.forEach((c) => {
+          state.commitments.forEach((c, i) => {
             const opt = document.createElement("option");
             opt.value = c.id;
-            opt.textContent = c.label;
+            opt.textContent = c.label || `Commitment ${i + 1} (untitled)`;
             if (c.id === v.commitmentId) opt.selected = true;
             editor.appendChild(opt);
           });
@@ -1692,7 +1712,7 @@
 
     function renderOptionEditor(state) {
       optionList.innerHTML = "";
-      state.commitments.forEach((c) => {
+      state.commitments.forEach((c, i) => {
         const row = document.createElement("div");
         row.className = "option-row";
 
@@ -1700,7 +1720,7 @@
         colorInput.type = "color";
         colorInput.className = "option-color";
         colorInput.value = c.color;
-        colorInput.setAttribute("aria-label", `Color for ${c.label}`);
+        colorInput.setAttribute("aria-label", `Color for ${c.label || "commitment " + (i + 1)}`);
         colorInput.addEventListener("change", () => commitOption(c.id, { color: colorInput.value }));
 
         const labelInput = document.createElement("input");
@@ -1708,6 +1728,7 @@
         labelInput.className = "option-label";
         labelInput.value = c.label;
         labelInput.maxLength = 40;
+        labelInput.placeholder = COMMITMENT_LABEL_HINTS[i] || "Commitment text";
         labelInput.setAttribute("aria-label", "Option text");
         labelInput.addEventListener("change", () => {
           const value = labelInput.value.trim();
@@ -1918,6 +1939,26 @@
       window.open(url, "_blank");
     });
 
+    pinSaveBtn.addEventListener("click", async () => {
+      const newPin = pinInputNew.value.trim();
+      if (!/^[0-9]{4,8}$/.test(newPin)) {
+        pinNote.textContent = "PIN must be 4–8 digits.";
+        return;
+      }
+      pinSaveBtn.disabled = true;
+      try {
+        const res = await apiSend("/api/pin", "PUT", { pin, newPin });
+        if (!res.ok) throw new Error("save failed");
+        pin = newPin; // keep this session authorized under the new PIN
+        pinInputNew.value = "";
+        pinNote.textContent = "PIN updated.";
+      } catch (err) {
+        pinNote.textContent = "Couldn't update the PIN — try again.";
+      }
+      pinSaveBtn.disabled = false;
+      setTimeout(() => { pinNote.textContent = ""; }, 3500);
+    });
+
     resetVotesBtn.addEventListener("click", async () => {
       if (!confirm("Reset all pledges? This can't be undone.")) return;
       resetVotesBtn.disabled = true;
@@ -1945,9 +1986,25 @@
       renderQR(document.getElementById("admin-qr-box"), url, 148);
     }
 
-    function unlock() {
+    // The PIN can be changed at runtime (see the "Update PIN" control
+    // below), so there's no fixed value left to check locally — unlocking
+    // means asking the server whether this PIN is currently correct.
+    async function unlock() {
       const value = pinInput.value.trim();
-      if (value !== ADMIN_PIN) {
+      if (!value) {
+        pinError.classList.add("active");
+        return;
+      }
+      pinSubmitBtn.disabled = true;
+      let ok = false;
+      try {
+        const res = await apiSend("/api/verify-pin", "POST", { pin: value });
+        ok = res.ok && (await res.json()).ok === true;
+      } catch (err) {
+        ok = false;
+      }
+      pinSubmitBtn.disabled = false;
+      if (!ok) {
         pinError.classList.add("active");
         return;
       }

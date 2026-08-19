@@ -38,7 +38,14 @@
  *   PUT    /api/pledge-background { pin, dataUrl }         -> set the pledge screen's background image (admin)
  *   DELETE /api/pledge-background { pin }                  -> clear the pledge screen's background image (admin)
  *
- * Set ADMIN_PIN via wrangler.toml [vars] or a secret; falls back to "1234".
+ *   PUT    /api/pin         { pin, newPin }                -> change the admin PIN (admin)
+ *   POST   /api/verify-pin  { pin }                        -> { ok: boolean }, used only to gate
+ *                                                              the admin panel's unlock screen
+ *
+ * The admin PIN defaults to ADMIN_PIN from wrangler.toml [vars]/secret
+ * (falling back to "1234" if unset), but PUT /api/pin overrides it with a
+ * KV-stored value that takes precedence from then on — see "Optional:
+ * change the admin PIN" in DEPLOYMENT.md for how to reset a forgotten one.
  */
 
 const KEYS = {
@@ -46,6 +53,7 @@ const KEYS = {
   settings: "settings",
   background: "background",
   pledgeBackground: "pledgeBackground",
+  pin: "pin",
 };
 const VOTE_PREFIX = "vote:";
 
@@ -58,19 +66,21 @@ function jsonKeyFor(pathname) {
   return pathname === "/api/pledge-background" ? "pledgeBackground" : "background";
 }
 
+// Labels start blank — colors are the app's own visual defaults, but the
+// text is campaign-specific and left for the admin to fill in.
 const DEFAULT_COMMITMENTS = [
-  { id: "learn", label: "Learn more", color: "#7c3aed" },
-  { id: "training", label: "Attend training", color: "#3b82f6" },
-  { id: "challenge", label: "Challenge assumptions", color: "#10b981" },
-  { id: "speak", label: "Speak up", color: "#f59e0b" },
-  { id: "support", label: "Support colleague", color: "#f97316" },
-  { id: "share", label: "Share story", color: "#ef4444" },
+  { id: "learn", label: "", color: "#7c3aed" },
+  { id: "training", label: "", color: "#3b82f6" },
+  { id: "challenge", label: "", color: "#10b981" },
+  { id: "speak", label: "", color: "#f59e0b" },
+  { id: "support", label: "", color: "#f97316" },
+  { id: "share", label: "", color: "#ef4444" },
 ];
 
 const DEFAULT_SETTINGS = {
-  eyebrow: "Wear It Purple Day",
-  title: "Courage Wall",
-  tagline: "Pick one commitment you're making today. It'll land on the wall right away.",
+  eyebrow: "",
+  title: "",
+  tagline: "",
   accentColor: "#4C1D6B",
   goalEnabled: false,
   goalTarget: 100,
@@ -162,9 +172,15 @@ async function parseBody(request) {
   }
 }
 
-function checkPin(env, body) {
-  const pin = env.ADMIN_PIN || "1234";
+async function checkPin(env, body) {
+  // A KV-stored PIN (set via PUT /api/pin) always wins once one exists;
+  // otherwise fall back to the deploy-time ADMIN_PIN var/secret.
+  const pin = (await getJSON(env, KEYS.pin, null)) || env.ADMIN_PIN || "1234";
   return typeof body?.pin === "string" && body.pin === pin;
+}
+
+function sanitizeNewPin(newPin) {
+  return typeof newPin === "string" && /^[0-9]{4,8}$/.test(newPin) ? newPin : null;
 }
 
 function sanitizeCommitments(list) {
@@ -255,7 +271,7 @@ export default {
 
     if (pathname === "/api/votes" && method === "DELETE") {
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       await deleteAllVotes(env);
       return json({ success: true });
     }
@@ -264,7 +280,7 @@ export default {
     if (voteMatch && VOTE_ID.test(voteMatch[1]) && (method === "PATCH" || method === "DELETE")) {
       const voteId = voteMatch[1];
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       const key = VOTE_PREFIX + voteId;
 
       if (method === "DELETE") {
@@ -300,7 +316,7 @@ export default {
 
     if (pathname === "/api/commitments" && method === "PUT") {
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       const clean = sanitizeCommitments(body?.commitments);
       if (!clean) return json({ error: "Invalid commitments" }, 400);
       await putJSON(env, KEYS.commitments, clean);
@@ -314,11 +330,32 @@ export default {
 
     if (pathname === "/api/settings" && method === "PUT") {
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       const current = await getJSON(env, KEYS.settings, DEFAULT_SETTINGS);
       const next = sanitizeSettings(body?.settings, current);
       await putJSON(env, KEYS.settings, next);
       return json({ success: true, settings: next });
+    }
+
+    // Purely a yes/no check for the admin panel's unlock screen — since
+    // the PIN can now change at runtime (see PUT /api/pin below), the
+    // frontend can no longer gate that screen against a hardcoded value.
+    if (pathname === "/api/verify-pin" && method === "POST") {
+      const body = await parseBody(request);
+      return json({ ok: await checkPin(env, body) });
+    }
+
+    // ---- admin PIN ----
+    // Requires the *current* pin to authorize the change, same as every
+    // other admin action — there's no separate "forgot PIN" recovery
+    // beyond deleting the KV key (see DEPLOYMENT.md).
+    if (pathname === "/api/pin" && method === "PUT") {
+      const body = await parseBody(request);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
+      const newPin = sanitizeNewPin(body?.newPin);
+      if (!newPin) return json({ error: "PIN must be 4-8 digits" }, 400);
+      await putJSON(env, KEYS.pin, newPin);
+      return json({ success: true });
     }
 
     // ---- background images (display wall backdrop, and separately the
@@ -330,7 +367,7 @@ export default {
 
     if (bgKey && method === "PUT") {
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       const dataUrl = body?.dataUrl;
       if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
         return json({ error: "Invalid image" }, 400);
@@ -344,7 +381,7 @@ export default {
 
     if (bgKey && method === "DELETE") {
       const body = await parseBody(request);
-      if (!checkPin(env, body)) return json({ error: "Unauthorized" }, 401);
+      if (!(await checkPin(env, body))) return json({ error: "Unauthorized" }, 401);
       await env.VOTES_KV.delete(bgKey);
       return json({ success: true });
     }
