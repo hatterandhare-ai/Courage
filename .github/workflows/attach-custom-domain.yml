@@ -1,0 +1,110 @@
+name: Attach Custom Domain
+
+# One-off/reusable: attaches a hostname to the courage-wall Pages project —
+# registers it with Pages, then makes sure a proxied DNS CNAME record points
+# it at courage-wall.pages.dev. Safe to re-run: every step checks current
+# state first and skips work that's already done.
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: "Full hostname to attach to the courage-wall Pages project"
+        required: true
+        default: "pledge.tomhawkins.me"
+
+jobs:
+  attach-domain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Look up the zone ID for the domain's root
+        id: zone
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          HOSTNAME="${{ inputs.hostname }}"
+          ROOT_DOMAIN=$(echo "$HOSTNAME" | rev | cut -d. -f1,2 | rev)
+          RESPONSE=$(curl -s "https://api.cloudflare.com/client/v4/zones?name=$ROOT_DOMAIN" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Zone lookup failed: $(echo "$RESPONSE" | jq -c '.errors')"
+            exit 1
+          fi
+          ZONE_ID=$(echo "$RESPONSE" | jq -r '.result[0].id // empty')
+          if [ -z "$ZONE_ID" ]; then
+            echo "::error::No zone found for $ROOT_DOMAIN on this Cloudflare account. It needs to be added as a zone first."
+            exit 1
+          fi
+          echo "Found zone $ROOT_DOMAIN ($ZONE_ID)"
+          echo "zone_id=$ZONE_ID" >> "$GITHUB_OUTPUT"
+          echo "root_domain=$ROOT_DOMAIN" >> "$GITHUB_OUTPUT"
+
+      - name: Register the Pages custom domain (skip if already attached)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          HOSTNAME="${{ inputs.hostname }}"
+          EXISTING=$(curl -s "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/courage-wall/domains" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          ALREADY=$(echo "$EXISTING" | jq -r --arg h "$HOSTNAME" '[.result[]?.name] | index($h) != null')
+          if [ "$ALREADY" = "true" ]; then
+            echo "$HOSTNAME is already attached to the Pages project — skipping registration."
+            exit 0
+          fi
+          RESPONSE=$(curl -s -X POST \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/courage-wall/domains" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+            -d "{\"name\":\"$HOSTNAME\"}")
+          echo "$RESPONSE" | jq .
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to register the Pages custom domain: $(echo "$RESPONSE" | jq -c '.errors')"
+            exit 1
+          fi
+
+      - name: Ensure the DNS CNAME record exists and points at the Pages project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          HOSTNAME="${{ inputs.hostname }}"
+          ZONE_ID="${{ steps.zone.outputs.zone_id }}"
+          ROOT_DOMAIN="${{ steps.zone.outputs.root_domain }}"
+          SUBDOMAIN=$(echo "$HOSTNAME" | sed "s/\.$ROOT_DOMAIN\$//")
+
+          EXISTING=$(curl -s "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records?type=CNAME&name=$HOSTNAME" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN")
+          RECORD_ID=$(echo "$EXISTING" | jq -r '.result[0].id // empty')
+          BODY=$(jq -n --arg name "$SUBDOMAIN" '{type:"CNAME", name:$name, content:"courage-wall.pages.dev", proxied:true, ttl:1}')
+
+          if [ -n "$RECORD_ID" ]; then
+            echo "DNS record already exists ($RECORD_ID) — updating it to make sure it points at the right place."
+            RESPONSE=$(curl -s -X PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d "$BODY")
+          else
+            echo "Creating the DNS record..."
+            RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/dns_records" \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" -d "$BODY")
+          fi
+          echo "$RESPONSE" | jq .
+          SUCCESS=$(echo "$RESPONSE" | jq -r '.success')
+          if [ "$SUCCESS" != "true" ]; then
+            echo "::error::Failed to create/update the DNS record: $(echo "$RESPONSE" | jq -c '.errors')"
+            exit 1
+          fi
+
+      - name: Verify end state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          HOSTNAME="${{ inputs.hostname }}"
+          DOMAIN_STATUS=$(curl -s "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/courage-wall/domains/$HOSTNAME" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" | jq -c '.result | {name, status}')
+          {
+            echo "### Custom domain: $HOSTNAME"
+            echo ""
+            echo "Pages domain status: \`$DOMAIN_STATUS\`"
+            echo ""
+            echo "DNS/certificate provisioning can take a few minutes after this runs — if the status above isn't \"active\" yet, re-check the Pages project's Custom domains tab shortly."
+          } >> "$GITHUB_STEP_SUMMARY"
